@@ -151,6 +151,11 @@ function createDistubeClient(client) {
     }
 
     const distube = new DisTube(client, {
+        // FFmpeg binary override (needed for some hosts)
+        ffmpeg: {
+            path: ffmpegPath,
+        },
+
         // PLUGINS
         // yt-dlp provides reliable YouTube extraction, bypassing most 403 errors
         plugins: [new YtDlpPlugin(ytDlpOptions)],
