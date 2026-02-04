@@ -252,7 +252,7 @@ async function createDistubeClient(client) {
     logYtDlpDiagnostics();
 
     const { DisTube } = require('distube');
-    const { YtDlpPlugin } = require('@distube/yt-dlp');
+    const { CustomYtDlpPlugin } = require('./CustomYtDlpPlugin');
 
     // Configure yt-dlp plugin options
     const ytDlpOptions = {
@@ -273,7 +273,7 @@ async function createDistubeClient(client) {
 
         // PLUGINS
         // yt-dlp provides reliable YouTube extraction, bypassing most 403 errors
-        plugins: [new YtDlpPlugin(ytDlpOptions)],
+        plugins: [new CustomYtDlpPlugin(ytDlpOptions)],
 
         // QUEUE BEHAVIOR
         // Only emit playSong when a NEW song starts (not on unpause)
