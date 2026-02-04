@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Top plate/Viewfinder accent -->
+  <rect x="10" y="4" width="12" height="6" rx="1" fill="#b07a4d"/>
+  <!-- Main Body -->
+  <rect x="2" y="8" width="28" height="18" rx="3" fill="#1f1c18"/>
+  <!-- Lens Outer Ring -->
+  <circle cx="16" cy="17" r="7" fill="#d8d8d8"/>
+  <!-- Lens Inner -->
+  <circle cx="16" cy="17" r="5.5" fill="#1f1c18"/>
+  <!-- Lens Reflection -->
+  <circle cx="17.5" cy="15.5" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <!-- Red Dot -->
+  <circle cx="26" cy="11" r="1.5" fill="#cc0000"/>
+</svg>

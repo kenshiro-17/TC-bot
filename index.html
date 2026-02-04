@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vishak Marcil — Photographer & Editor</title>
+    <meta
+      name="description"
+      content="Germany-based photographer and editor specializing in portraits, fashion, weddings, and nature."
+    />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="hero" id="top">
+      <nav class="nav">
+        <a class="logo" href="#top">Vishak Marcil</a>
+        <div class="nav-links">
+          <a href="#works">Works</a>
+          <a href="#services">Services</a>
+          <a href="#booking">Booking</a>
+          <a href="#contact">Contact</a>
+        </div>
+        <a class="cta small" href="#booking">Book a shoot</a>
+      </nav>
+      <div class="hero-content">
+        <div class="hero-copy">
+          <p class="eyebrow">Germany-based photographer & editor</p>
+          <h1>
+            Cinematic portraits, fashion stories, and weddings with the quiet
+            poetry of nature.
+          </h1>
+          <p class="subhead">
+            I craft visual narratives that feel timeless—muted tones, intimate
+            light, and a refined editorial finish.
+          </p>
+          <div class="hero-actions">
+            <a class="cta" href="#booking">Book a shoot</a>
+            <a class="cta ghost" href="#works">View works</a>
+          </div>
+          <div class="hero-meta">
+            <span>Portraits</span>
+            <span>Fashion</span>
+            <span>Weddings</span>
+            <span>Nature</span>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="canvas-frame">
+            <canvas id="camera-canvas"></canvas>
+            <div class="canvas-fallback">
+              <div class="fallback-card">
+                <p>Classic chrome lens</p>
+                <span>Interactive camera loading</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-footer">
+        <p>Available for commissioned work across Germany and Europe.</p>
+        <a href="#booking">Request availability</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="section about" id="about">
+        <div class="section-header">
+          <p class="eyebrow">About</p>
+          <h2>Vishak Marcil</h2>
+        </div>
+        <div class="about-grid">
+          <p>
+            My work explores the tension between elegance and honesty. I shoot
+            portraits, fashion, weddings, and nature with a calm, editorial eye,
+            shaping each frame through an intentional, film-inspired grade.
+          </p>
+          <p>
+            As an editor, I focus on rhythm, texture, and atmosphere—crafting a
+            visual language that feels tactile and true. From intimate weddings
+            to stylized fashion stories, I build imagery that lingers.
+          </p>
+          <div class="about-tags">
+            <span>Portraits</span>
+            <span>Fashion</span>
+            <span>Weddings</span>
+            <span>Nature</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section works" id="works">
+        <div class="section-header">
+          <p class="eyebrow">Selected works</p>
+          <h2>Stories in muted light</h2>
+        </div>
+        <div class="works-grid">
+          <article class="work-card large">
+            <img
+              src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
+              alt="Forest portrait"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Quiet Forest</h3>
+              <p>Nature · 2024</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&q=80"
+              alt="Fashion editorial"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Editorial Silence</h3>
+              <p>Fashion · 2023</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80"
+              alt="Wedding detail"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Vow Lines</h3>
+              <p>Weddings · 2024</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=900&q=80"
+              alt="Portrait"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Soft Signal</h3>
+              <p>Portraits · 2022</p>
+            </div>
+          </article>
+          <article class="work-card tall">
+            <img
+              src="https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=80"
+              alt="Nature scene"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Still River</h3>
+              <p>Nature · 2023</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=900&q=80"
+              alt="Fashion portrait"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Studio Ember</h3>
+              <p>Fashion · 2024</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&q=80"
+              alt="Fashion editorial"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Minimal Motion</h3>
+              <p>Fashion · 2022</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&q=80"
+              alt="Fashion portrait"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Grey Studio</h3>
+              <p>Fashion · 2021</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=900&q=80"
+              alt="Portrait"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Window Light</h3>
+              <p>Portraits · 2024</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80"
+              alt="Wedding couple"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Ceremony Drift</h3>
+              <p>Weddings · 2023</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80"
+              alt="Forest detail"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Moss & Air</h3>
+              <p>Nature · 2022</p>
+            </div>
+          </article>
+          <article class="work-card">
+            <img
+              src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80"
+              alt="Wedding detail"
+              loading="lazy"
+              decoding="async" />
+            <div class="work-meta">
+              <h3>Soft Vows</h3>
+              <p>Weddings · 2022</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section services" id="services">
+        <div class="section-header">
+          <p class="eyebrow">Services</p>
+          <h2>Commissioned work</h2>
+        </div>
+        <div class="services-grid">
+          <article class="service-card">
+            <h3>Portrait Sessions</h3>
+            <p>
+              Intimate, story-driven portraits with thoughtful direction and a
+              film-inspired finish.
+            </p>
+          </article>
+          <article class="service-card">
+            <h3>Fashion & Editorial</h3>
+            <p>
+              Campaigns and editorials with restrained color, clean styling, and
+              a strong narrative arc.
+            </p>
+          </article>
+          <article class="service-card">
+            <h3>Weddings & Elopements</h3>
+            <p>
+              Documentary coverage and elegant portraits to preserve the quiet
+              details of the day.
+            </p>
+          </article>
+          <article class="service-card">
+            <h3>Nature & Travel Series</h3>
+            <p>
+              Atmospheric landscapes and travel stories with a cinematic, muted
+              palette.
+            </p>
+          </article>
+          <article class="service-card">
+            <h3>Editing & Retouching</h3>
+            <p>
+              Color grading and retouching that respects texture, mood, and
+              natural light.
+            </p>
+          </article>
+        </div>
+        <p class="services-note">Pricing available upon request.</p>
+      </section>
+
+      <section class="section booking" id="booking">
+        <div class="section-header">
+          <p class="eyebrow">Booking</p>
+          <h2>Request availability</h2>
+        </div>
+        <form class="booking-form">
+          <div class="form-row">
+            <label>
+              Name
+              <input type="text" name="name" placeholder="Your name" />
+            </label>
+            <label>
+              Email
+              <input type="email" name="email" placeholder="you@email.com" />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              Project type
+              <select name="project">
+                <option>Portrait session</option>
+                <option>Fashion editorial</option>
+                <option>Wedding / Elopement</option>
+                <option>Nature / Travel</option>
+                <option>Editing / Retouching</option>
+              </select>
+            </label>
+            <label>
+              Preferred date
+              <input type="text" name="date" placeholder="DD / MM / YYYY" />
+            </label>
+          </div>
+          <label>
+            Message
+            <textarea
+              name="message"
+              rows="4"
+              placeholder="Tell me about your project, mood, and location..."
+            ></textarea>
+          </label>
+          <button class="cta" type="submit">Send inquiry</button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="footer" id="contact">
+      <div>
+        <h3>Vishak Marcil</h3>
+        <p>Photographer & Editor · Germany</p>
+      </div>
+      <div class="footer-links">
+        <a href="mailto:hello@vishakmarcil.com">hello@vishakmarcil.com</a>
+        <a href="https://instagram.com" target="_blank" rel="noreferrer"
+          >Instagram</a
+        >
+      </div>
+    </footer>
+
+    <!-- Switch to ES Modules for advanced Three.js features -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/studio-freight/lenis@1.0.29/bundled/lenis.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script type="module" src="main.js"></script>
+
+    <!-- Lightbox Overlay -->
+    <div class="lightbox" id="lightbox" aria-hidden="true">
+      <button class="lightbox-close" aria-label="Close preview">×</button>
+      <div class="lightbox-content">
+        <img src="" alt="" id="lightbox-img" />
+        <div class="lightbox-caption"></div>
+      </div>
+    </div>
+  </body>
+</html>
