@@ -87,7 +87,9 @@ module.exports = {
             }, 2000);
 
         } catch (error) {
-            logger.error(`Play command error: ${error.message}`);
+            // Enhanced error logging with stack trace and query context
+            logger.error(`Play command failed for query "${query}"`);
+            logger.error(error.stack || error);
 
             // Handle specific error cases
             let errorMessage = 'Failed to play the requested song.';
