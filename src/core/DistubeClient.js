@@ -23,6 +23,8 @@
 const { AUDIO } = require('../config/constants');
 const logger = require('../utils/logger');
 const ffmpegStatic = require('ffmpeg-static');
+const fs = require('fs');
+const { spawnSync } = require('child_process');
 
 // Import event handlers
 const playSongHandler = require('../events/distube/playSong');
@@ -110,9 +112,28 @@ function setupIdleTimeout(client, distube) {
 function createDistubeClient(client) {
     logger.info('Initializing DisTube client...');
 
-    if (ffmpegStatic) {
-        process.env.FFMPEG_PATH = ffmpegStatic;
+    let ffmpegPath = null;
+
+    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+        ffmpegPath = ffmpegStatic;
         logger.info(`FFmpeg path set to ffmpeg-static: ${ffmpegStatic}`);
+    } else {
+        const whichResult = spawnSync('which', ['ffmpeg'], { encoding: 'utf8' });
+        if (whichResult.status === 0) {
+            const detectedPath = (whichResult.stdout || '').trim();
+            if (detectedPath) {
+                ffmpegPath = detectedPath;
+                logger.info(`FFmpeg path detected on PATH: ${detectedPath}`);
+            }
+        }
+    }
+
+    if (ffmpegPath) {
+        process.env.FFMPEG_PATH = ffmpegPath;
+    } else {
+        logger.error('FFmpeg not found. Install ffmpeg or ensure ffmpeg-static is available.');
+        logger.error('Railway fix: set NIXPACKS_PKGS=ffmpeg and redeploy.');
+        process.exit(1);
     }
 
     const { DisTube } = require('distube');
