@@ -20,8 +20,6 @@
  * 9. Audio is transmitted to Discord's voice gateway
  */
 
-const { DisTube } = require('distube');
-const { YtDlpPlugin } = require('@distube/yt-dlp');
 const { AUDIO } = require('../config/constants');
 const logger = require('../utils/logger');
 const ffmpegStatic = require('ffmpeg-static');
@@ -116,6 +114,9 @@ function createDistubeClient(client) {
         process.env.FFMPEG_PATH = ffmpegStatic;
         logger.info(`FFmpeg path set to ffmpeg-static: ${ffmpegStatic}`);
     }
+
+    const { DisTube } = require('distube');
+    const { YtDlpPlugin } = require('@distube/yt-dlp');
 
     // Configure yt-dlp plugin options
     const ytDlpOptions = {
