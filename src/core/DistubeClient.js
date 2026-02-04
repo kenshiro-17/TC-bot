@@ -134,10 +134,33 @@ async function downloadFile(url, destination) {
     });
 }
 
+function getYtDlpAssetInfo() {
+    const platform = process.platform;
+    const arch = process.arch;
+
+    if (platform === 'win32') {
+        return { filename: 'yt-dlp.exe', url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' };
+    }
+
+    if (platform === 'linux' && arch === 'arm64') {
+        return { filename: 'yt-dlp_linux_aarch64', url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64' };
+    }
+
+    if (platform === 'linux' && arch === 'x64') {
+        return { filename: 'yt-dlp_linux', url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux' };
+    }
+
+    if (platform === 'darwin' && arch === 'arm64') {
+        return { filename: 'yt-dlp_macos', url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos' };
+    }
+
+    return { filename: 'yt-dlp', url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp' };
+}
+
 async function ensureYtDlpBinary() {
-    const platformExt = process.platform === 'win32' ? '.exe' : '';
+    const asset = getYtDlpAssetInfo();
     const ytDlpDir = process.env.YTDLP_DIR || path.join('/tmp', 'yt-dlp');
-    const ytDlpFilename = process.env.YTDLP_FILENAME || `yt-dlp${platformExt}`;
+    const ytDlpFilename = process.env.YTDLP_FILENAME || asset.filename;
     const ytDlpPath = path.join(ytDlpDir, ytDlpFilename);
 
     process.env.YTDLP_DIR = ytDlpDir;
@@ -148,7 +171,7 @@ async function ensureYtDlpBinary() {
         return;
     }
 
-    const url = process.env.YTDLP_URL || `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytDlpFilename}`;
+    const url = process.env.YTDLP_URL || asset.url;
 
     try {
         await fs.promises.mkdir(ytDlpDir, { recursive: true });
