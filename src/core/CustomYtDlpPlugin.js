@@ -79,14 +79,22 @@ class CustomYtDlpPlugin extends PlayableExtractorPlugin {
         return true;
     }
 
+    buildFlags(baseFlags) {
+        const flags = [...baseFlags];
+        if (process.env.YOUTUBE_COOKIES_PATH) {
+            flags.push('--cookies', process.env.YOUTUBE_COOKIES_PATH);
+        }
+        return flags;
+    }
+
     async resolve(url, options) {
-        const info = await runYtDlpJson(url, [
+        const info = await runYtDlpJson(url, this.buildFlags([
             '--dump-single-json',
             '--no-warnings',
             '--prefer-free-formats',
             '--skip-download',
             '--simulate',
-        ]).catch((error) => {
+        ])).catch((error) => {
             throw new DisTubeError('YTDLP_ERROR', `${error.message || error}`);
         });
 
@@ -116,7 +124,7 @@ class CustomYtDlpPlugin extends PlayableExtractorPlugin {
             throw new DisTubeError('YTDLP_PLUGIN_INVALID_SONG', 'Cannot get stream URL from invalid song.');
         }
 
-        const info = await runYtDlpJson(song.url, [
+        const info = await runYtDlpJson(song.url, this.buildFlags([
             '--dump-single-json',
             '--no-warnings',
             '--prefer-free-formats',
@@ -124,7 +132,7 @@ class CustomYtDlpPlugin extends PlayableExtractorPlugin {
             '--simulate',
             '--format',
             'ba/ba*',
-        ]).catch((error) => {
+        ])).catch((error) => {
             throw new DisTubeError('YTDLP_ERROR', `${error.message || error}`);
         });
 
