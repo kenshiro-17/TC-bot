@@ -32,6 +32,77 @@ const errorHandler = require('../events/distube/error');
 const disconnectHandler = require('../events/distube/disconnect');
 const finishHandler = require('../events/distube/finish');
 
+// Store idle timeout timers per guild
+const idleTimers = new Map();
+
+/**
+ * Setup voice state tracking for idle timeout
+ * Leaves voice channel after IDLE_TIMEOUT when bot is alone
+ * @param {Client} client - Discord.js client instance
+ * @param {DisTube} distube - DisTube instance
+ */
+function setupIdleTimeout(client, distube) {
+    client.on('voiceStateUpdate', (oldState, newState) => {
+        // Check if this event involves the bot's voice channel
+        const botVoice = distube.voices.get(oldState.guild.id) || distube.voices.get(newState.guild.id);
+        if (!botVoice || !botVoice.channel) return;
+
+        const botChannelId = botVoice.channel.id;
+        const guildId = oldState.guild.id || newState.guild.id;
+
+        // Only care about events in the bot's voice channel
+        if (oldState.channelId !== botChannelId && newState.channelId !== botChannelId) return;
+
+        // Get members in the bot's channel (excluding bots)
+        const channel = botVoice.channel;
+        const humanMembers = channel.members.filter(member => !member.user.bot);
+
+        if (humanMembers.size === 0) {
+            // Bot is alone, start idle timer if not already running
+            if (!idleTimers.has(guildId)) {
+                logger.info(`Bot is alone in voice channel, starting ${AUDIO.IDLE_TIMEOUT / 60000} minute idle timer for guild: ${guildId}`);
+
+                const timer = setTimeout(async () => {
+                    try {
+                        // Double check we're still alone
+                        const currentVoice = distube.voices.get(guildId);
+                        if (currentVoice && currentVoice.channel) {
+                            const currentHumans = currentVoice.channel.members.filter(m => !m.user.bot);
+                            if (currentHumans.size === 0) {
+                                logger.info(`Idle timeout reached, leaving voice channel in guild: ${guildId}`);
+
+                                // Stop any playing music
+                                const queue = distube.getQueue(guildId);
+                                if (queue) {
+                                    await distube.stop(guildId);
+                                }
+
+                                // Leave the voice channel
+                                await distube.voices.leave(guildId);
+                            }
+                        }
+                    } catch (error) {
+                        logger.error(`Error during idle timeout leave: ${error.message}`);
+                    } finally {
+                        idleTimers.delete(guildId);
+                    }
+                }, AUDIO.IDLE_TIMEOUT);
+
+                idleTimers.set(guildId, timer);
+            }
+        } else {
+            // Someone is in the channel, cancel any idle timer
+            if (idleTimers.has(guildId)) {
+                logger.debug(`User joined voice channel, cancelling idle timer for guild: ${guildId}`);
+                clearTimeout(idleTimers.get(guildId));
+                idleTimers.delete(guildId);
+            }
+        }
+    });
+
+    logger.debug('Voice state idle timeout handler registered');
+}
+
 /**
  * Creates and configures the DisTube instance
  * @param {Client} client - Discord.js client instance
@@ -77,6 +148,9 @@ function createDistubeClient(client) {
 
     // Register event handlers
     registerEventHandlers(distube);
+
+    // Setup idle timeout for empty voice channels
+    setupIdleTimeout(client, distube);
 
     logger.info('DisTube client initialized successfully');
     return distube;

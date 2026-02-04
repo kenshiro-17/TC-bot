@@ -70,6 +70,9 @@ function createClient() {
             // Without this, voice connections will stay stuck in "Signalling" state
             // and no audio will play!
             GatewayIntentBits.GuildVoiceStates,
+
+            // Required for tracking voice channel membership (idle timeout)
+            GatewayIntentBits.GuildMembers,
         ],
     });
 }

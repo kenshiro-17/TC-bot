@@ -6,6 +6,12 @@
  */
 
 module.exports = {
+    // Channel Configuration
+    CHANNELS: {
+        // Name of the dedicated music requests channel
+        MUSIC_REQUESTS_NAME: 'music-requests',
+    },
+
     // Audio Configuration
     AUDIO: {
         // Stream type for DisTube

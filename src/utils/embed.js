@@ -25,6 +25,26 @@ function formatDuration(seconds) {
 }
 
 /**
+ * Create a visual progress bar
+ * @param {number} current - Current position in seconds
+ * @param {number} total - Total duration in seconds
+ * @param {number} length - Bar length in characters (default 12)
+ * @returns {string} Progress bar string like [▓▓▓▓▓░░░░░░░]
+ */
+function createProgressBar(current, total, length = 12) {
+    if (!total || total === 0) return '[Live Stream]';
+
+    const progress = Math.min(current / total, 1);
+    const filled = Math.round(progress * length);
+    const empty = length - filled;
+
+    const filledChar = '▓';
+    const emptyChar = '░';
+
+    return `[${filledChar.repeat(filled)}${emptyChar.repeat(empty)}]`;
+}
+
+/**
  * Create "Now Playing" embed for current track
  */
 function nowPlayingEmbed(song, queue) {
@@ -142,6 +162,7 @@ function infoEmbed(title, description) {
 
 module.exports = {
     formatDuration,
+    createProgressBar,
     nowPlayingEmbed,
     addedToQueueEmbed,
     queueEmbed,

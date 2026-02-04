@@ -6,7 +6,11 @@
  */
 
 const { errorEmbed } = require('../utils/embed');
+const { ensureMusicChannel } = require('../utils/channelGuard');
 const logger = require('../utils/logger');
+
+// List of music commands that require the music-requests channel
+const MUSIC_COMMANDS = ['play', 'skip', 'stop', 'queue', 'join', 'leave', 'nowplaying'];
 
 module.exports = {
     name: 'interactionCreate',
@@ -31,6 +35,12 @@ module.exports = {
         }
 
         try {
+            // Check if this is a music command that needs channel restriction
+            if (MUSIC_COMMANDS.includes(interaction.commandName)) {
+                const canProceed = await ensureMusicChannel(interaction);
+                if (!canProceed) return;
+            }
+
             logger.debug(`Executing command: ${interaction.commandName} by ${interaction.user.tag}`);
             await command.execute(interaction);
 
