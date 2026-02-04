@@ -7,11 +7,12 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "postinstall": "npm rebuild"
+    "postinstall": "npm rebuild --no-optional --ignore-scripts"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
     "@discordjs/voice": "^0.18.0",
+    "@discordjs/opus": "^0.10.0",
     "opusscript": "^0.1.1",
     "distube": "^5.2.3",
     "@distube/yt-dlp": "^2.0.1",

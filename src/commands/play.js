@@ -10,6 +10,7 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
+const { QUEUE } = require('../config/constants');
 const { errorEmbed } = require('../utils/embed');
 const logger = require('../utils/logger');
 
@@ -56,12 +57,24 @@ module.exports = {
             });
         }
 
+        const distube = interaction.client.distube;
+        const queue = distube.getQueue(interaction.guildId);
+        const currentCount = queue?.songs?.length || 0;
+
+        if (currentCount + 1 > QUEUE.MAX_SIZE) {
+            return interaction.reply({
+                embeds: [errorEmbed(
+                    'Queue Full',
+                    `Queue is full (max ${QUEUE.MAX_SIZE}). Currently ${currentCount} in queue. Remove songs or wait for playback to finish.`
+                )],
+                ephemeral: true
+            });
+        }
+
         // Defer reply since fetching video info may take time
         await interaction.deferReply();
 
         try {
-            const distube = interaction.client.distube;
-
             // DisTube handles everything:
             // - URL validation
             // - Search if query is not a URL

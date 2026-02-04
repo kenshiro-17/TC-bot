@@ -59,6 +59,32 @@ function validateEnvironment() {
     }
 }
 
+function resolveOptionalDependency(name) {
+    try {
+        require.resolve(name);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+function checkOpusEncoders() {
+    const hasNative = resolveOptionalDependency('@discordjs/opus');
+    const hasFallback = resolveOptionalDependency('opusscript');
+
+    if (hasNative) {
+        return;
+    }
+
+    if (hasFallback) {
+        logger.warn('Native Opus encoder not found; using opusscript fallback. Install @discordjs/opus for best performance.');
+        return;
+    }
+
+    logger.error('No Opus encoder available. Install @discordjs/opus or opusscript.');
+    process.exit(1);
+}
+
 // Create Discord client with required intents
 function createClient() {
     return new Client({
@@ -136,6 +162,9 @@ async function main() {
 
     // Validate environment
     validateEnvironment();
+
+    // Ensure an Opus encoder is available
+    checkOpusEncoders();
 
     // Create Discord client
     const client = createClient();
