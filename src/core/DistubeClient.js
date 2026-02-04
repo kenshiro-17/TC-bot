@@ -165,6 +165,8 @@ async function ensureYtDlpBinary() {
 
     process.env.YTDLP_DIR = ytDlpDir;
     process.env.YTDLP_FILENAME = ytDlpFilename;
+    process.env.YTDLP_URL = process.env.YTDLP_URL || asset.url;
+    process.env.YTDLP_DISABLE_DOWNLOAD = '1';
 
     if (fs.existsSync(ytDlpPath)) {
         logger.info(`yt-dlp binary found at ${ytDlpPath}`);
@@ -214,6 +216,7 @@ function logYtDlpDiagnostics() {
 
     logger.info(`YTDLP_DIR=${process.env.YTDLP_DIR || ''}`);
     logger.info(`YTDLP_FILENAME=${process.env.YTDLP_FILENAME || ''}`);
+    logger.info(`YTDLP_DISABLE_DOWNLOAD=${process.env.YTDLP_DISABLE_DOWNLOAD || ''}`);
     inspectFile('yt-dlp target', ytDlpPath);
     inspectFile('yt-dlp bundled', bundledPath);
 }
