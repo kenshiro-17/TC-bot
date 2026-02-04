@@ -1,5 +1,5 @@
 /**
- * Discord.js ready Event Handler
+ * Discord.js clientReady Event Handler
  *
  * Fires once when the bot successfully logs in and is ready.
  * Handles command registration and startup logging.
@@ -9,7 +9,7 @@ const { registerCommands } = require('../commands');
 const logger = require('../utils/logger');
 
 module.exports = {
-    name: 'ready',
+    name: 'clientReady',
     once: true, // Only fire once
 
     /**
