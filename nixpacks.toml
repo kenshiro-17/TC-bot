@@ -1,0 +1,3 @@
+[variables]
+NIXPACKS_PKGS = "ffmpeg"
+NIXPACKS_NODE_VERSION = "22.12.0"
