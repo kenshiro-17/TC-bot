@@ -24,6 +24,7 @@ const { DisTube } = require('distube');
 const { YtDlpPlugin } = require('@distube/yt-dlp');
 const { AUDIO } = require('../config/constants');
 const logger = require('../utils/logger');
+const ffmpegStatic = require('ffmpeg-static');
 
 // Import event handlers
 const playSongHandler = require('../events/distube/playSong');
@@ -110,6 +111,11 @@ function setupIdleTimeout(client, distube) {
  */
 function createDistubeClient(client) {
     logger.info('Initializing DisTube client...');
+
+    if (ffmpegStatic) {
+        process.env.FFMPEG_PATH = ffmpegStatic;
+        logger.info(`FFmpeg path set to ffmpeg-static: ${ffmpegStatic}`);
+    }
 
     // Configure yt-dlp plugin options
     const ytDlpOptions = {
