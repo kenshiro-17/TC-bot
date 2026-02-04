@@ -34,27 +34,34 @@ module.exports = {
         const member = interaction.member;
         const voiceChannel = member.voice?.channel;
 
+        const respondError = async (title, message) => {
+            const response = {
+                embeds: [errorEmbed(title, message)],
+                ephemeral: true
+            };
+
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply(response);
+            } else {
+                await interaction.reply(response);
+            }
+        };
+
         // Validate user is in a voice channel
         if (!voiceChannel) {
-            return interaction.reply({
-                embeds: [errorEmbed('Not in Voice Channel', 'You must be in a voice channel to use this command.')],
-                ephemeral: true
-            });
+            await respondError('Not in Voice Channel', 'You must be in a voice channel to use this command.');
+            return;
         }
 
         // Check bot permissions in the voice channel
         const permissions = voiceChannel.permissionsFor(interaction.client.user);
         if (!permissions.has('Connect')) {
-            return interaction.reply({
-                embeds: [errorEmbed('Missing Permissions', 'I need permission to **Connect** to your voice channel.')],
-                ephemeral: true
-            });
+            await respondError('Missing Permissions', 'I need permission to **Connect** to your voice channel.');
+            return;
         }
         if (!permissions.has('Speak')) {
-            return interaction.reply({
-                embeds: [errorEmbed('Missing Permissions', 'I need permission to **Speak** in your voice channel.')],
-                ephemeral: true
-            });
+            await respondError('Missing Permissions', 'I need permission to **Speak** in your voice channel.');
+            return;
         }
 
         const distube = interaction.client.distube;
@@ -62,17 +69,17 @@ module.exports = {
         const currentCount = queue?.songs?.length || 0;
 
         if (currentCount + 1 > QUEUE.MAX_SIZE) {
-            return interaction.reply({
-                embeds: [errorEmbed(
-                    'Queue Full',
-                    `Queue is full (max ${QUEUE.MAX_SIZE}). Currently ${currentCount} in queue. Remove songs or wait for playback to finish.`
-                )],
-                ephemeral: true
-            });
+            await respondError(
+                'Queue Full',
+                `Queue is full (max ${QUEUE.MAX_SIZE}). Currently ${currentCount} in queue. Remove songs or wait for playback to finish.`
+            );
+            return;
         }
 
-        // Defer reply since fetching video info may take time
-        await interaction.deferReply();
+        if (!interaction.deferred && !interaction.replied) {
+            // Defer reply since fetching video info may take time
+            await interaction.deferReply({ ephemeral: true });
+        }
 
         try {
             // DisTube handles everything:

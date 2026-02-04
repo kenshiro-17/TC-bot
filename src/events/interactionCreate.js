@@ -35,6 +35,18 @@ module.exports = {
         }
 
         try {
+            if (interaction.commandName === 'play' && !interaction.deferred && !interaction.replied) {
+                try {
+                    await interaction.deferReply({ ephemeral: true });
+                } catch (error) {
+                    if (error.code === 10062) {
+                        logger.warn('Interaction expired before deferReply could be sent.');
+                        return;
+                    }
+                    throw error;
+                }
+            }
+
             // Check if this is a music command that needs channel restriction
             if (MUSIC_COMMANDS.includes(interaction.commandName)) {
                 const canProceed = await ensureMusicChannel(interaction);

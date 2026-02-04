@@ -31,13 +31,19 @@ async function ensureMusicChannel(interaction) {
 
     if (existingChannel) {
         // Channel exists, redirect the user
-        await interaction.reply({
+        const response = {
             embeds: [errorEmbed(
                 'Wrong Channel',
                 `Please use ${existingChannel} for music commands.`
             )],
             ephemeral: true
-        });
+        };
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply(response);
+        } else {
+            await interaction.reply(response);
+        }
         return false;
     }
 
@@ -70,26 +76,38 @@ async function ensureMusicChannel(interaction) {
 
         logger.info(`Created #${channelName} channel in guild: ${interaction.guild.name}`);
 
-        await interaction.reply({
+        const response = {
             embeds: [infoEmbed(
                 'Channel Created',
                 `I've created ${newChannel} for music commands. Please use that channel!`
             )],
             ephemeral: true
-        });
+        };
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply(response);
+        } else {
+            await interaction.reply(response);
+        }
         return false;
 
     } catch (error) {
         logger.error(`Failed to create #${channelName} channel:`, error.message);
 
         // Couldn't create channel (probably missing permissions)
-        await interaction.reply({
+        const response = {
             embeds: [errorEmbed(
                 'Setup Required',
                 `Please create a \`#${channelName}\` channel for music commands, or grant me permission to create channels.`
             )],
             ephemeral: true
-        });
+        };
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply(response);
+        } else {
+            await interaction.reply(response);
+        }
         return false;
     }
 }
