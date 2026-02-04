@@ -40,7 +40,13 @@ function runYtDlpJson(url, flags) {
         child.on('close', (code) => {
             if (code === 0) {
                 try {
-                    resolve(JSON.parse(stdout));
+                    const start = stdout.indexOf('{');
+                    const end = stdout.lastIndexOf('}');
+                    if (start === -1 || end === -1) {
+                        return reject(new Error(stderr || stdout || 'yt-dlp did not return JSON output'));
+                    }
+                    const jsonText = stdout.slice(start, end + 1);
+                    resolve(JSON.parse(jsonText));
                 } catch (error) {
                     reject(new Error(stderr || stdout || error.message));
                 }

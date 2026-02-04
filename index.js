@@ -65,16 +65,39 @@ function configureYouTubeCookies() {
     const base64 = process.env.YOUTUBE_COOKIES_BASE64;
     if (!base64) return;
 
-    try {
-        const decoded = Buffer.from(base64, 'base64').toString('utf8');
-        const cookiesPath = path.join('/tmp', 'youtube-cookies.txt');
-        fs.writeFileSync(cookiesPath, decoded, { encoding: 'utf8' });
-        process.env.YOUTUBE_COOKIES_PATH = cookiesPath;
-        logger.info(`YouTube cookies loaded from base64 into ${cookiesPath}`);
-    } catch (error) {
-        logger.error(`Failed to decode YOUTUBE_COOKIES_BASE64: ${error.message}`);
-        process.exit(1);
+    const trimmed = base64.trim().replace(/^['"]|['"]$/g, '');
+    const cookiesPath = path.join('/tmp', 'youtube-cookies.txt');
+
+    let decoded = '';
+    let usedRaw = false;
+
+    // Allow raw Netscape cookies directly (helpful if env var wasn't base64)
+    if (trimmed.startsWith('# Netscape')) {
+        decoded = trimmed;
+        usedRaw = true;
+    } else {
+        try {
+            decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+        } catch (error) {
+            logger.error(`Failed to decode YOUTUBE_COOKIES_BASE64: ${error.message}`);
+            return;
+        }
     }
+
+    const firstLine = (decoded.split('\n')[0] || '').trim();
+    if (!firstLine.startsWith('# Netscape HTTP Cookie File')) {
+        if (firstLine.startsWith('{\\rtf')) {
+            logger.error('YouTube cookies look like an RTF file. Re-export as a plain text Netscape cookies file.');
+        } else {
+            logger.error(`YouTube cookies are not in Netscape format (first line: ${firstLine || '<empty>'}).`);
+        }
+        logger.error('Skipping cookie setup. Export cookies.txt as plain text and base64-encode it.');
+        return;
+    }
+
+    fs.writeFileSync(cookiesPath, decoded, { encoding: 'utf8' });
+    process.env.YOUTUBE_COOKIES_PATH = cookiesPath;
+    logger.info(`YouTube cookies loaded ${usedRaw ? 'from raw text' : 'from base64'} into ${cookiesPath}`);
 }
 
 function resolveOptionalDependency(name) {
