@@ -167,6 +167,34 @@ async function ensureYtDlpBinary() {
     }
 }
 
+function logYtDlpDiagnostics() {
+    const ytDlpDir = process.env.YTDLP_DIR || path.join('/tmp', 'yt-dlp');
+    const ytDlpFilename = process.env.YTDLP_FILENAME || `yt-dlp${process.platform === 'win32' ? '.exe' : ''}`;
+    const ytDlpPath = path.join(ytDlpDir, ytDlpFilename);
+    const bundledPath = path.join(__dirname, '..', '..', 'node_modules', '@distube', 'yt-dlp', 'bin', ytDlpFilename);
+
+    const inspectFile = (label, filePath) => {
+        if (!fs.existsSync(filePath)) {
+            logger.warn(`${label} missing at ${filePath}`);
+            return;
+        }
+
+        try {
+            const stats = fs.statSync(filePath);
+            const firstLine = fs.readFileSync(filePath, { encoding: 'utf8' }).split('\n')[0];
+            logger.info(`${label} exists at ${filePath} (size ${stats.size})`);
+            logger.info(`${label} first line: ${firstLine}`);
+        } catch (error) {
+            logger.warn(`${label} inspect failed at ${filePath}: ${error.message}`);
+        }
+    };
+
+    logger.info(`YTDLP_DIR=${process.env.YTDLP_DIR || ''}`);
+    logger.info(`YTDLP_FILENAME=${process.env.YTDLP_FILENAME || ''}`);
+    inspectFile('yt-dlp target', ytDlpPath);
+    inspectFile('yt-dlp bundled', bundledPath);
+}
+
 async function createDistubeClient(client) {
     logger.info('Initializing DisTube client...');
 
@@ -195,6 +223,7 @@ async function createDistubeClient(client) {
     }
 
     await ensureYtDlpBinary();
+    logYtDlpDiagnostics();
 
     const { DisTube } = require('distube');
     const { YtDlpPlugin } = require('@distube/yt-dlp');
