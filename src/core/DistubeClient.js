@@ -24,7 +24,13 @@ const { AUDIO } = require('../config/constants');
 const logger = require('../utils/logger');
 const ffmpegStatic = require('ffmpeg-static');
 const fs = require('fs');
+const path = require('path');
+const https = require('https');
+const { pipeline } = require('stream');
+const { promisify } = require('util');
 const { spawnSync } = require('child_process');
+
+const streamPipeline = promisify(pipeline);
 
 // Import event handlers
 const playSongHandler = require('../events/distube/playSong');
@@ -109,7 +115,59 @@ function setupIdleTimeout(client, distube) {
  * @param {Client} client - Discord.js client instance
  * @returns {DisTube} Configured DisTube instance
  */
-function createDistubeClient(client) {
+async function downloadFile(url, destination) {
+    await new Promise((resolve, reject) => {
+        https.get(url, (response) => {
+            if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                return resolve(downloadFile(response.headers.location, destination));
+            }
+
+            if (response.statusCode !== 200) {
+                reject(new Error(`Failed to download ${url} (status ${response.statusCode})`));
+                return;
+            }
+
+            streamPipeline(response, fs.createWriteStream(destination))
+                .then(resolve)
+                .catch(reject);
+        }).on('error', reject);
+    });
+}
+
+async function ensureYtDlpBinary() {
+    const platformExt = process.platform === 'win32' ? '.exe' : '';
+    const ytDlpDir = process.env.YTDLP_DIR || path.join('/tmp', 'yt-dlp');
+    const ytDlpFilename = process.env.YTDLP_FILENAME || `yt-dlp${platformExt}`;
+    const ytDlpPath = path.join(ytDlpDir, ytDlpFilename);
+
+    process.env.YTDLP_DIR = ytDlpDir;
+    process.env.YTDLP_FILENAME = ytDlpFilename;
+
+    if (fs.existsSync(ytDlpPath)) {
+        logger.info(`yt-dlp binary found at ${ytDlpPath}`);
+        return;
+    }
+
+    const url = process.env.YTDLP_URL || `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytDlpFilename}`;
+
+    try {
+        await fs.promises.mkdir(ytDlpDir, { recursive: true });
+        await downloadFile(url, ytDlpPath);
+        await fs.promises.chmod(ytDlpPath, 0o755);
+        logger.info(`yt-dlp binary downloaded to ${ytDlpPath}`);
+    } catch (error) {
+        logger.error(`Failed to download yt-dlp binary: ${error.message}`);
+        const pythonCheck = spawnSync('python3', ['--version'], { encoding: 'utf8' });
+        if (pythonCheck.status !== 0) {
+            logger.error('python3 is not available and yt-dlp binary could not be downloaded.');
+            logger.error('Railway fix: ensure outbound access to GitHub or install python3.');
+            process.exit(1);
+        }
+        logger.warn('python3 is available; yt-dlp may still run if a script is present.');
+    }
+}
+
+async function createDistubeClient(client) {
     logger.info('Initializing DisTube client...');
 
     let ffmpegPath = null;
@@ -135,6 +193,8 @@ function createDistubeClient(client) {
         logger.error('Railway fix: set NIXPACKS_PKGS=ffmpeg and redeploy.');
         process.exit(1);
     }
+
+    await ensureYtDlpBinary();
 
     const { DisTube } = require('distube');
     const { YtDlpPlugin } = require('@distube/yt-dlp');

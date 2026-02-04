@@ -177,7 +177,7 @@ async function main() {
 
     // Initialize DisTube
     // This must happen AFTER client creation but BEFORE login
-    client.distube = createDistubeClient(client);
+    client.distube = await createDistubeClient(client);
 
     // Setup graceful shutdown
     setupShutdownHandlers(client);
