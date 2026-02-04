@@ -25,4 +25,10 @@ Steps:
    - `DISCORD_TOKEN`
    - `CLIENT_ID`
    - `GUILD_ID` (optional)
+   - `YOUTUBE_COOKIES_BASE64` (optional, for bot-check videos)
 3. Deploy and use `/play` in `#music-requests`.
+
+### YouTube Cookies (Base64)
+If YouTube requires sign-in, export cookies in Netscape format, base64-encode them,
+and set `YOUTUBE_COOKIES_BASE64`. The bot writes them to `/tmp/youtube-cookies.txt`
+and uses them automatically.

@@ -46,6 +46,8 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { loadCommands } = require('./src/commands');
 const { createDistubeClient } = require('./src/core/DistubeClient');
 const logger = require('./src/utils/logger');
+const fs = require('fs');
+const path = require('path');
 
 // Validate required environment variables
 function validateEnvironment() {
@@ -55,6 +57,22 @@ function validateEnvironment() {
     if (missing.length > 0) {
         logger.error(`Missing required environment variables: ${missing.join(', ')}`);
         logger.error('Copy .env.example to .env and fill in your values.');
+        process.exit(1);
+    }
+}
+
+function configureYouTubeCookies() {
+    const base64 = process.env.YOUTUBE_COOKIES_BASE64;
+    if (!base64) return;
+
+    try {
+        const decoded = Buffer.from(base64, 'base64').toString('utf8');
+        const cookiesPath = path.join('/tmp', 'youtube-cookies.txt');
+        fs.writeFileSync(cookiesPath, decoded, { encoding: 'utf8' });
+        process.env.YOUTUBE_COOKIES_PATH = cookiesPath;
+        logger.info(`YouTube cookies loaded from base64 into ${cookiesPath}`);
+    } catch (error) {
+        logger.error(`Failed to decode YOUTUBE_COOKIES_BASE64: ${error.message}`);
         process.exit(1);
     }
 }
@@ -162,6 +180,9 @@ async function main() {
 
     // Validate environment
     validateEnvironment();
+
+    // Load YouTube cookies if provided
+    configureYouTubeCookies();
 
     // Ensure an Opus encoder is available
     checkOpusEncoders();
