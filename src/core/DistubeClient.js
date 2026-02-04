@@ -112,7 +112,9 @@ function createDistubeClient(client) {
     logger.info('Initializing DisTube client...');
 
     // Configure yt-dlp plugin options
-    const ytDlpOptions = {};
+    const ytDlpOptions = {
+        update: true,
+    };
 
     // Add cookies file if configured (for age-restricted content)
     if (process.env.YOUTUBE_COOKIES_PATH) {
