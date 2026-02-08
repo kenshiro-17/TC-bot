@@ -125,14 +125,14 @@ async function createPlayerClient(client) {
             // ("Failed to extract signature decipher algorithm").
             useClient: 'IOS',
         },
-        // Custom stream: download full audio then pipe through PassThrough.
-        // The default createNativeReadable pushes all data + EOF in one read()
-        // call, which causes FFmpeg to see an empty stream (120ms playback).
-        // Using PassThrough with proper async writing ensures backpressure.
+        // Custom stream: use youtubei.js's built-in download() which handles
+        // CDN authentication, headers, and chunked range requests properly.
+        // Pipe through PassThrough for Node.js stream compatibility and backpressure.
         createStream: async (track, _ext) => {
             const ext = YoutubeiExtractor.getInstance();
             const innertube = ext.innerTube;
             const { PassThrough } = require('stream');
+            const { Readable } = require('stream');
 
             let videoId = new URL(track.url).searchParams.get('v');
             if (!videoId) videoId = track.url.split('/').at(-1)?.split('?').at(0);
@@ -141,53 +141,33 @@ async function createPlayerClient(client) {
             const videoInfo = await innertube.getBasicInfo(videoId, 'IOS');
 
             const format = videoInfo.chooseFormat({ quality: 'best', format: 'mp4', type: 'audio' });
-            logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}, hasUrl=${!!format.url}`);
+            logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}`);
 
-            if (!format.url || !format.content_length) {
-                throw new Error(`No stream URL available (itag=${format.itag})`);
-            }
+            // Use youtubei.js's built-in download which handles headers + auth properly
+            logger.info(`[Stream] Starting download via videoInfo.download()...`);
+            const webStream = await videoInfo.download({ type: 'audio', quality: 'best', format: 'mp4' });
 
+            // Convert Web ReadableStream to Node.js Readable, then pipe through PassThrough
+            // for proper backpressure handling with FFmpeg
             const passthrough = new PassThrough();
+            const nodeStream = Readable.fromWeb(webStream);
 
-            // Download and pipe in background (don't await — let FFmpeg consume as data arrives)
-            (async () => {
-                try {
-                    const CHUNK_SIZE = 1048576 * 10; // 10MB
-                    let start = 0;
-                    let end = Math.min(format.content_length, CHUNK_SIZE);
-
-                    while (start < format.content_length) {
-                        if (end >= format.content_length) end = format.content_length;
-
-                        const fUrl = `${format.url}&cpn=${videoInfo.cpn}&range=${start}-${end}`;
-                        const resp = await innertube.session.http.fetch_function(fUrl, {
-                            headers: { 'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)' },
-                        });
-
-                        if (!resp.ok || !resp.body) {
-                            logger.error(`[Stream] CDN error at ${Math.round(start / format.content_length * 100)}%: status=${resp.status}`);
-                            passthrough.destroy(new Error(`CDN returned ${resp.status}`));
-                            return;
-                        }
-
-                        for await (const chunk of resp.body) {
-                            // Respect backpressure: wait if the buffer is full
-                            if (!passthrough.write(Buffer.from(chunk))) {
-                                await new Promise(resolve => passthrough.once('drain', resolve));
-                            }
-                        }
-
-                        start = end + 1;
-                        end += CHUNK_SIZE;
-                    }
-
-                    logger.info(`[Stream] Download complete (${format.content_length} bytes)`);
-                    passthrough.end();
-                } catch (err) {
-                    logger.error(`[Stream] Download error: ${err.message}`);
-                    passthrough.destroy(err);
+            nodeStream.on('data', (chunk) => {
+                if (!passthrough.write(chunk)) {
+                    nodeStream.pause();
+                    passthrough.once('drain', () => nodeStream.resume());
                 }
-            })();
+            });
+
+            nodeStream.on('end', () => {
+                logger.info(`[Stream] Download complete for: ${track.title}`);
+                passthrough.end();
+            });
+
+            nodeStream.on('error', (err) => {
+                logger.error(`[Stream] Download error: ${err.message}`);
+                passthrough.destroy(err);
+            });
 
             return passthrough;
         },
