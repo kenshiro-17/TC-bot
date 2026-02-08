@@ -34,7 +34,7 @@ src/
 ```
 /play command
   -> discord-player routes query to YoutubeiExtractor
-  -> youtubei.js calls YouTube InnerTube API (ANDROID client)
+  -> youtubei.js calls YouTube InnerTube API (IOS client)
   -> Audio stream URL extracted (no signature deciphering needed)
   -> FFmpeg transcodes to Opus
   -> discord-voip streams to Discord voice gateway
@@ -88,7 +88,7 @@ For age-restricted content, export YouTube cookies from your browser as a Netsca
 
 - **All music commands restricted to `#music-requests`** channel (auto-created if missing) via `channelGuard.js`
 - **YoutubeiExtractor registered before default extractors** and default YouTube handlers disabled to prevent URL conflicts
-- **ANDROID client used for streaming** to bypass YouTube signature decipher failures
+- **IOS client used for streaming** (default in discord-player-youtubei; ANDROID is blocked by YouTube)
 - **Idle timeout** (5 min) auto-disconnects when bot is alone in voice channel
 - **leaveOnEmpty/leaveOnEnd/leaveOnStop all disabled** in queue options; idle timeout handles disconnection instead
 
@@ -130,7 +130,7 @@ DisTube relied on `yt-dlp` (a command-line YouTube downloader) which frequently 
 
 ### Files added
 
-- `src/core/PlayerClient.js` - discord-player setup, YoutubeiExtractor registration, all event handlers (playerStart, audioTrackAdd, audioTracksAdd, playerError, error, emptyQueue, disconnect), idle timeout logic
+- `src/core/PlayerClient.js` - discord-player setup, YoutubeiExtractor registration with cookie fallback, all event handlers (playerStart, audioTrackAdd, audioTracksAdd, playerError, playerSkip, error, emptyQueue, disconnect), idle timeout logic
 
 ### API migration mapping
 
@@ -154,11 +154,12 @@ DisTube relied on `yt-dlp` (a command-line YouTube downloader) which frequently 
 | Event: `addSong` | Event: `audioTrackAdd` |
 | Event: `finish` | Event: `emptyQueue` |
 
-### Post-migration fix (6c416c7)
+### Post-migration fixes
 
-After the initial migration, YouTube URLs returned `NoResultError` with `Extractor: N/A`. Root cause: the default extractors included a YouTube query detector that claimed the URL but couldn't play it (YouTube support was removed from defaults in v7). Fixed by:
+**Extractor not found (6c416c7):** YouTube URLs returned `NoResultError` with `Extractor: N/A`. The default extractors included a YouTube query detector that claimed the URL but couldn't play it (YouTube support was removed from defaults in v7). Fixed by registering `YoutubeiExtractor` before `DefaultExtractors` and upgrading `discord-player-youtubei` from 1.3.1 to 1.5.0.
 
-1. Registering `YoutubeiExtractor` **before** `DefaultExtractors`
-2. Excluding `YouTubeExtractor` and `YoutubeMusicExtractor` from defaults
-3. Using the default `IOS` client for streaming (ANDROID stream URLs are blocked by YouTube)
-4. Upgrading `discord-player-youtubei` from 1.3.1 to 1.5.0
+**Search returning 0 results (7690150):** Added search-first approach in `/play` — calls `player.search()` then passes the `SearchResult` to `player.play()` for better diagnostics and reliability.
+
+**Stale cookies poisoning InnerTube (25be653):** Expired YouTube cookies caused the InnerTube session to silently fail, making ALL searches return 0 results. Added a cookie fallback strategy: try with cookies, verify with a test search, and re-register without cookies if the test fails.
+
+**ANDROID client stream URLs blocked (d24f753):** YouTube blocked ANDROID client stream URLs, causing silent stream failures (FFmpeg "premature close" errors swallowed by discord-player). Switched to the default `IOS` client. Added `playerSkip` event handler to surface `ERR_NO_STREAM` failures instead of silently skipping tracks.
