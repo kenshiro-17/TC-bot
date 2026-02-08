@@ -114,13 +114,15 @@ async function createPlayerClient(client) {
     // Register YoutubeiExtractor FIRST so it handles YouTube URLs
     // before any default extractor can claim them.
     //
-    // Cookies can cause InnerTube session failures (stale/expired cookies
-    // poison the session and make ALL searches return 0 results).
-    // Strategy: try with cookies first, verify with a test search,
-    // and if it fails, re-register without cookies.
-    // Let discord-player-youtubei use its default client (IOS).
-    // ANDROID client stream URLs are increasingly blocked by YouTube.
-    const baseOptions = {};
+    // PoToken (Proof of Origin Token) is required to bypass YouTube's
+    // IP-based blocking of cloud/datacenter IPs (e.g., Railway, Heroku).
+    // Without it, search works but audio stream downloads get blocked.
+    const baseOptions = {
+        generateWithPoToken: true,
+        streamOptions: {
+            useClient: 'WEB',
+        },
+    };
 
     let usedCookies = false;
 
