@@ -136,6 +136,7 @@ async function createPlayerClient(client) {
 
             logger.debug(`[Stream] Fetching video info for ID: ${videoId}`);
             const info = await innertube.getBasicInfo(videoId, { client: 'IOS' });
+            const cpn = info?.cpn || info?.player_response?.cpn || '';
 
             const format = info.chooseFormat
                 ? info.chooseFormat({ quality: 'best', type: 'audio', format: 'mp4' })
@@ -165,9 +166,12 @@ async function createPlayerClient(client) {
 
                     const buildUrl = (s, e) => {
                         const hasRange = streamUrl.includes('range=');
-                        if (hasRange) return streamUrl;
+                        const hasCpn = streamUrl.includes('cpn=');
                         const sep = streamUrl.includes('?') ? '&' : '?';
-                        return `${streamUrl}${sep}range=${s}-${e}`;
+                        let url = streamUrl;
+                        if (!hasRange) url = `${url}${sep}range=${s}-${e}`;
+                        if (!hasCpn && cpn) url = `${url}${url.includes('?') ? '&' : '?'}cpn=${cpn}`;
+                        return url;
                     };
 
                     // If content length unknown, do a single request without range
@@ -191,7 +195,10 @@ async function createPlayerClient(client) {
                         const end = Math.min(start + CHUNK_SIZE - 1, total - 1);
                         const urlWithRange = buildUrl(start, end);
                         const resp = await innertube.session.http.fetch_function(urlWithRange, {
-                            headers: { 'User-Agent': ua },
+                            headers: {
+                                'User-Agent': ua,
+                                'Accept': '*/*',
+                            },
                         });
 
                         if (!resp.ok || !resp.body) {
