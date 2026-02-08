@@ -19,6 +19,7 @@ const { DefaultExtractors } = require('@discord-player/extractor');
 const { AUDIO } = require('../config/constants');
 const logger = require('../utils/logger');
 const fs = require('fs');
+const { PassThrough } = require('stream');
 
 // Store idle timeout timers per guild
 const idleTimers = new Map();
@@ -116,6 +117,87 @@ async function createPlayerClient(client) {
     const baseOptions = {
         streamOptions: {
             useClient: 'IOS',
+        },
+        // Custom stream to avoid short/empty streams on Windows
+        createStream: async (track, extractor) => {
+            const ext = extractor ?? YoutubeiExtractor.getInstance?.();
+            const innertube = ext?.innerTube;
+            if (!innertube) {
+                throw new Error('YoutubeiExtractor is not initialized');
+            }
+
+            let videoId = null;
+            try {
+                const url = new URL(track.url);
+                videoId = url.searchParams.get('v') || url.pathname.split('/').pop();
+            } catch {
+                videoId = track.url.split('v=').pop();
+            }
+
+            logger.debug(`[Stream] Fetching video info for ID: ${videoId}`);
+            const info = await innertube.getBasicInfo(videoId, { client: 'IOS' });
+
+            const format = info.chooseFormat
+                ? info.chooseFormat({ quality: 'best', type: 'audio', format: 'mp4' })
+                : (info?.formats?.[0] || info?.streaming_data?.formats?.[0]);
+
+            if (!format) throw new Error('No audio format available');
+
+            const contentLength = Number(format.content_length ?? format.contentLength ?? 0);
+            let streamUrl = format.url;
+
+            if (!streamUrl && typeof format.decipher === 'function' && innertube.session?.player) {
+                streamUrl = format.decipher(innertube.session.player);
+            }
+
+            if (!streamUrl) throw new Error('No stream URL available');
+
+            const pass = new PassThrough();
+            const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+            const ua = 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)';
+
+            (async () => {
+                try {
+                    let start = 0;
+                    const total = contentLength || Number.MAX_SAFE_INTEGER;
+
+                    while (start < total) {
+                        const end = contentLength
+                            ? Math.min(start + CHUNK_SIZE - 1, contentLength - 1)
+                            : start + CHUNK_SIZE - 1;
+
+                        const resp = await innertube.session.http.fetch_function(streamUrl, {
+                            headers: {
+                                'User-Agent': ua,
+                                Range: `bytes=${start}-${end}`,
+                            },
+                        });
+
+                        if (!resp.ok || !resp.body) {
+                            throw new Error(`CDN response ${resp.status}`);
+                        }
+
+                        for await (const chunk of resp.body) {
+                            if (!pass.write(Buffer.from(chunk))) {
+                                await new Promise(resolve => pass.once('drain', resolve));
+                            }
+                        }
+
+                        if (!contentLength) {
+                            // If content length is unknown, break after first chunk
+                            break;
+                        }
+
+                        start = end + 1;
+                    }
+
+                    pass.end();
+                } catch (err) {
+                    pass.destroy(err);
+                }
+            })();
+
+            return pass;
         },
     };
 
