@@ -160,5 +160,5 @@ After the initial migration, YouTube URLs returned `NoResultError` with `Extract
 
 1. Registering `YoutubeiExtractor` **before** `DefaultExtractors`
 2. Excluding `YouTubeExtractor` and `YoutubeMusicExtractor` from defaults
-3. Using the `ANDROID` client for streaming (`streamOptions: { useClient: 'ANDROID' }`) to bypass signature decipher failures
+3. Using the default `IOS` client for streaming (ANDROID stream URLs are blocked by YouTube)
 4. Upgrading `discord-player-youtubei` from 1.3.1 to 1.5.0

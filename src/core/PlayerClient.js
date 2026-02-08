@@ -118,11 +118,9 @@ async function createPlayerClient(client) {
     // poison the session and make ALL searches return 0 results).
     // Strategy: try with cookies first, verify with a test search,
     // and if it fails, re-register without cookies.
-    const baseOptions = {
-        streamOptions: {
-            useClient: 'ANDROID',
-        },
-    };
+    // Let discord-player-youtubei use its default client (IOS).
+    // ANDROID client stream URLs are increasingly blocked by YouTube.
+    const baseOptions = {};
 
     let usedCookies = false;
 
@@ -272,6 +270,20 @@ function registerEventHandlers(player) {
 
         if (error.stack) {
             logger.debug(`Error stack: ${error.stack}`);
+        }
+    });
+
+    // Track skipped (stream extraction failure or manual skip)
+    player.events.on('playerSkip', (queue, track, reason, description) => {
+        logger.warn(`Track skipped: "${track.title}" | reason=${reason} | ${description}`);
+
+        if (reason === 'ERR_NO_STREAM') {
+            const channel = queue.metadata?.channel;
+            if (channel) {
+                channel.send({
+                    embeds: [errorEmbed('Stream Error', `Could not stream **${track.title}**. Skipping...`)]
+                }).catch(() => {});
+            }
         }
     });
 
