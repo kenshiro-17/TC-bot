@@ -10,7 +10,7 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
-const { useMainPlayer } = require('discord-player');
+const { useMainPlayer, QueryType } = require('discord-player');
 const { QUEUE } = require('../config/constants');
 const { errorEmbed } = require('../utils/embed');
 const logger = require('../utils/logger');
@@ -78,7 +78,23 @@ module.exports = {
         }
 
         try {
-            const { track } = await player.play(voiceChannel, query, {
+            // Search first so we can log the result and diagnose issues
+            logger.info(`Searching for: ${query}`);
+            const searchResult = await player.search(query, {
+                requestedBy: interaction.user,
+                searchEngine: QueryType.AUTO,
+            });
+
+            logger.info(`Search result: hasTracks=${searchResult.hasTracks()}, extractor=${searchResult.extractor?.identifier || 'N/A'}, tracks=${searchResult.tracks?.length || 0}`);
+
+            if (!searchResult.hasTracks()) {
+                await interaction.editReply({
+                    embeds: [errorEmbed('No Results', `No results found for **${query}**.`)]
+                });
+                return;
+            }
+
+            const { track } = await player.play(voiceChannel, searchResult, {
                 nodeOptions: {
                     metadata: {
                         channel: interaction.channel,

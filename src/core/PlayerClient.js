@@ -101,7 +101,15 @@ async function createPlayerClient(client) {
         logger.warn('ffmpeg-static not available, relying on system FFmpeg');
     }
 
-    const player = new Player(client);
+    const player = new Player(client, {
+        // Enable debug logging to diagnose extraction issues
+        skipFFmpeg: false,
+    });
+
+    // Always enable debug listener for player-level diagnostics
+    player.on('debug', (message) => {
+        logger.debug(`[Player] ${message}`);
+    });
 
     // Register YoutubeiExtractor FIRST so it handles YouTube URLs
     // before any default extractor can claim them
@@ -126,13 +134,14 @@ async function createPlayerClient(client) {
     await player.extractors.register(YoutubeiExtractor, youtubeiOptions);
     logger.info('YoutubeiExtractor registered for YouTube support');
 
-    // Load default extractors (SoundCloud, Spotify metadata, etc.)
-    // Exclude any YouTube-related default extractors to avoid conflicts
-    await player.extractors.loadMulti(DefaultExtractors, {
-        YouTubeExtractor: false,
-        YoutubeMusicExtractor: false,
-    });
-    logger.info('Default extractors loaded (YouTube handlers excluded)');
+    // Load default extractors (SoundCloud, Spotify, Vimeo, etc.)
+    // Note: YouTube extractors were already removed from defaults in discord-player v7
+    await player.extractors.loadMulti(DefaultExtractors);
+    logger.info('Default extractors loaded');
+
+    // Log all registered extractors for diagnostics
+    const extractorNames = [...player.extractors.store.keys()];
+    logger.info(`Registered extractors: ${extractorNames.join(', ')}`);
 
     // Register player event handlers
     registerEventHandlers(player);
@@ -262,12 +271,10 @@ function registerEventHandlers(player) {
         }
     });
 
-    // Debug events
-    if (process.env.LOG_LEVEL === 'debug') {
-        player.events.on('debug', (queue, message) => {
-            logger.debug(`[Player Debug] ${message}`);
-        });
-    }
+    // Debug events - always enabled to help diagnose extraction issues
+    player.events.on('debug', (queue, message) => {
+        logger.debug(`[Player Debug] ${message}`);
+    });
 
     logger.debug('Player event handlers registered');
 }
