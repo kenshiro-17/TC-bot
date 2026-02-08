@@ -120,7 +120,10 @@ async function createPlayerClient(client) {
     const baseOptions = {
         generateWithPoToken: true,
         streamOptions: {
-            useClient: 'WEB',
+            // IOS client provides direct stream URLs (no signature deciphering).
+            // WEB client requires signature deciphering which fails on Railway
+            // ("Failed to extract signature decipher algorithm").
+            useClient: 'IOS',
         },
     };
 
