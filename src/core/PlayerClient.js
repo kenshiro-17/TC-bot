@@ -125,10 +125,14 @@ async function createPlayerClient(client) {
             // ("Failed to extract signature decipher algorithm").
             useClient: 'IOS',
         },
-        // Custom stream function to diagnose YouTube CDN blocking
+        // Custom stream: download full audio then pipe through PassThrough.
+        // The default createNativeReadable pushes all data + EOF in one read()
+        // call, which causes FFmpeg to see an empty stream (120ms playback).
+        // Using PassThrough with proper async writing ensures backpressure.
         createStream: async (track, _ext) => {
             const ext = YoutubeiExtractor.getInstance();
             const innertube = ext.innerTube;
+            const { PassThrough } = require('stream');
 
             let videoId = new URL(track.url).searchParams.get('v');
             if (!videoId) videoId = track.url.split('/').at(-1)?.split('?').at(0);
@@ -143,59 +147,49 @@ async function createPlayerClient(client) {
                 throw new Error(`No stream URL available (itag=${format.itag})`);
             }
 
-            // Test fetch the first chunk to diagnose CDN blocking
-            const testUrl = `${format.url}&cpn=${videoInfo.cpn}&range=0-${Math.min(format.content_length, 65536)}`;
-            logger.info(`[Stream] Testing CDN fetch...`);
-            const testResp = await innertube.session.http.fetch_function(testUrl, {
-                headers: { 'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)' },
-            });
-            logger.info(`[Stream] CDN response: status=${testResp.status}, ok=${testResp.ok}, contentType=${testResp.headers.get('content-type')}`);
+            const passthrough = new PassThrough();
 
-            if (!testResp.ok) {
-                const body = await testResp.text();
-                logger.error(`[Stream] CDN blocked: ${testResp.status} - ${body.slice(0, 500)}`);
-                throw new Error(`YouTube CDN returned ${testResp.status}`);
-            }
+            // Download and pipe in background (don't await — let FFmpeg consume as data arrives)
+            (async () => {
+                try {
+                    const CHUNK_SIZE = 1048576 * 10; // 10MB
+                    let start = 0;
+                    let end = Math.min(format.content_length, CHUNK_SIZE);
 
-            // CDN works, create the actual readable stream
-            const { Readable } = require('stream');
-            const TEN_MB = 1048576 * 10;
-            let start = 0;
-            let end = Math.min(format.content_length, TEN_MB);
-            let isEnded = false;
+                    while (start < format.content_length) {
+                        if (end >= format.content_length) end = format.content_length;
 
-            return new Readable({
-                async read() {
-                    try {
-                        if (isEnded) return;
-                        if (end >= format.content_length) {
-                            isEnded = true;
-                            end = format.content_length;
-                        }
-                        const fUrl = `${format.url}&cpn=${videoInfo.cpn}&range=${start}-${end || ''}`;
+                        const fUrl = `${format.url}&cpn=${videoInfo.cpn}&range=${start}-${end}`;
                         const resp = await innertube.session.http.fetch_function(fUrl, {
                             headers: { 'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)' },
                         });
-                        if (!resp.body) {
-                            logger.error(`[Stream] No body at ${Math.round(start / format.content_length * 100)}%`);
-                            this.destroy(new Error('Stream body missing'));
+
+                        if (!resp.ok || !resp.body) {
+                            logger.error(`[Stream] CDN error at ${Math.round(start / format.content_length * 100)}%: status=${resp.status}`);
+                            passthrough.destroy(new Error(`CDN returned ${resp.status}`));
                             return;
                         }
+
                         for await (const chunk of resp.body) {
-                            this.push(Buffer.from(chunk));
+                            // Respect backpressure: wait if the buffer is full
+                            if (!passthrough.write(Buffer.from(chunk))) {
+                                await new Promise(resolve => passthrough.once('drain', resolve));
+                            }
                         }
-                        if (isEnded) {
-                            logger.info(`[Stream] Download complete (${format.content_length} bytes)`);
-                            this.push(null);
-                        }
+
                         start = end + 1;
-                        end += TEN_MB;
-                    } catch (err) {
-                        logger.error(`[Stream] Read error: ${err.message}`);
-                        this.destroy(err);
+                        end += CHUNK_SIZE;
                     }
-                },
-            });
+
+                    logger.info(`[Stream] Download complete (${format.content_length} bytes)`);
+                    passthrough.end();
+                } catch (err) {
+                    logger.error(`[Stream] Download error: ${err.message}`);
+                    passthrough.destroy(err);
+                }
+            })();
+
+            return passthrough;
         },
     };
 
