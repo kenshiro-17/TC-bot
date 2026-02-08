@@ -119,6 +119,13 @@ async function createPlayerClient(client) {
     // Without it, search works but audio stream downloads get blocked.
     const baseOptions = {
         generateWithPoToken: true,
+        // Pin a known working YouTube player ID so signature decipher extraction
+        // succeeds. Without this, youtubei.js auto-detects a player version that
+        // may have changed its script format, causing "Failed to extract signature
+        // decipher algorithm" and breaking PoToken application to CDN URLs.
+        innertubeConfigRaw: {
+            player_id: '0004de42',
+        },
         streamOptions: {
             // IOS client provides direct stream URLs (no signature deciphering).
             // WEB client requires signature deciphering which fails on Railway
