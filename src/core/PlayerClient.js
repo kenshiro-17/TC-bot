@@ -303,9 +303,9 @@ async function createPlayerClient(client) {
                 logger.info('YoutubeiExtractor verification passed (with cookies)');
                 usedCookies = true;
             } else {
-                // Cookies are broken - unregister and try without
-                logger.warn('YoutubeiExtractor search failed with cookies, retrying without cookies...');
-                await player.extractors.unregister(YoutubeiExtractor.identifier || 'com.retrouser955.discord-player.discord-player-youtubei');
+                // Do not fallback; some cookie sets fail search but still unlock CDN downloads
+                logger.warn('YoutubeiExtractor search failed with cookies, forcing cookies anyway for CDN access...');
+                usedCookies = true;
             }
         } catch (error) {
             logger.warn(`Cookie-based registration failed: ${error.message}`);
