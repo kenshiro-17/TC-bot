@@ -155,22 +155,43 @@ async function createPlayerClient(client) {
             const pass = new PassThrough();
             const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
             const ua = 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)';
+            logger.debug(`[Stream] Using URL (len=${streamUrl.length}) contentLength=${contentLength || 'unknown'}`);
 
             (async () => {
                 try {
                     let start = 0;
-                    const total = contentLength || Number.MAX_SAFE_INTEGER;
+                    const total = contentLength || 0;
+                    let part = 0;
+
+                    const buildUrl = (s, e) => {
+                        const hasRange = streamUrl.includes('range=');
+                        if (hasRange) return streamUrl;
+                        const sep = streamUrl.includes('?') ? '&' : '?';
+                        return `${streamUrl}${sep}range=${s}-${e}`;
+                    };
+
+                    // If content length unknown, do a single request without range
+                    if (!total) {
+                        const resp = await innertube.session.http.fetch_function(streamUrl, {
+                            headers: { 'User-Agent': ua },
+                        });
+                        if (!resp.ok || !resp.body) {
+                            throw new Error(`CDN response ${resp.status}`);
+                        }
+                        for await (const chunk of resp.body) {
+                            if (!pass.write(Buffer.from(chunk))) {
+                                await new Promise(resolve => pass.once('drain', resolve));
+                            }
+                        }
+                        pass.end();
+                        return;
+                    }
 
                     while (start < total) {
-                        const end = contentLength
-                            ? Math.min(start + CHUNK_SIZE - 1, contentLength - 1)
-                            : start + CHUNK_SIZE - 1;
-
-                        const resp = await innertube.session.http.fetch_function(streamUrl, {
-                            headers: {
-                                'User-Agent': ua,
-                                Range: `bytes=${start}-${end}`,
-                            },
+                        const end = Math.min(start + CHUNK_SIZE - 1, total - 1);
+                        const urlWithRange = buildUrl(start, end);
+                        const resp = await innertube.session.http.fetch_function(urlWithRange, {
+                            headers: { 'User-Agent': ua },
                         });
 
                         if (!resp.ok || !resp.body) {
@@ -183,14 +204,12 @@ async function createPlayerClient(client) {
                             }
                         }
 
-                        if (!contentLength) {
-                            // If content length is unknown, break after first chunk
-                            break;
-                        }
-
+                        part += 1;
+                        logger.debug(`[Stream] Chunk ${part}: ${start}-${end}`);
                         start = end + 1;
                     }
 
+                    logger.debug('[Stream] Download complete');
                     pass.end();
                 } catch (err) {
                     pass.destroy(err);
