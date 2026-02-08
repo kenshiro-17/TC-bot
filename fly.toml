@@ -1,0 +1,16 @@
+# Fly.io configuration for TC-Bot (Discord Music Bot)
+# This is a worker process (no HTTP), so no services/ports needed.
+
+app = "tc-bot"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# No HTTP services - this is a background worker (Discord bot)
+# No [http_service] or [[services]] section needed
+
+[vm]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

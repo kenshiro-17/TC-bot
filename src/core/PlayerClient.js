@@ -163,6 +163,14 @@ async function createPlayerClient(client) {
                     let start = 0;
                     const total = contentLength || 0;
                     let part = 0;
+                    let bytesWritten = 0;
+
+                    const noDataTimer = setTimeout(() => {
+                        if (bytesWritten === 0) {
+                            logger.error('[Stream] No data received from CDN within timeout');
+                            pass.destroy(new Error('No data received from CDN'));
+                        }
+                    }, 8000);
 
                     const buildUrl = (s, e) => {
                         try {
@@ -184,10 +192,12 @@ async function createPlayerClient(client) {
                             throw new Error(`CDN response ${resp.status}`);
                         }
                         for await (const chunk of resp.body) {
+                            bytesWritten += chunk.length ?? chunk.byteLength ?? 0;
                             if (!pass.write(Buffer.from(chunk))) {
                                 await new Promise(resolve => pass.once('drain', resolve));
                             }
                         }
+                        clearTimeout(noDataTimer);
                         pass.end();
                         return;
                     }
@@ -203,12 +213,14 @@ async function createPlayerClient(client) {
                         });
 
                         if (!resp.ok || !resp.body) {
+                            logger.error(`[Stream] CDN response ${resp.status} for range ${start}-${end}`);
                             throw new Error(`CDN response ${resp.status}`);
                         }
 
                         let wrote = 0;
                         for await (const chunk of resp.body) {
                             wrote += chunk.length ?? chunk.byteLength ?? 0;
+                            bytesWritten += chunk.length ?? chunk.byteLength ?? 0;
                             if (!pass.write(Buffer.from(chunk))) {
                                 await new Promise(resolve => pass.once('drain', resolve));
                             }
@@ -220,13 +232,16 @@ async function createPlayerClient(client) {
                                 headers: { 'User-Agent': ua, 'Accept': '*/*' },
                             });
                             if (!fullResp.ok || !fullResp.body) {
+                                logger.error(`[Stream] CDN full response ${fullResp.status}`);
                                 throw new Error(`CDN full response ${fullResp.status}`);
                             }
                             for await (const chunk of fullResp.body) {
+                                bytesWritten += chunk.length ?? chunk.byteLength ?? 0;
                                 if (!pass.write(Buffer.from(chunk))) {
                                     await new Promise(resolve => pass.once('drain', resolve));
                                 }
                             }
+                            clearTimeout(noDataTimer);
                             pass.end();
                             return;
                         }
@@ -237,8 +252,10 @@ async function createPlayerClient(client) {
                     }
 
                     logger.debug('[Stream] Download complete');
+                    clearTimeout(noDataTimer);
                     pass.end();
                 } catch (err) {
+                    logger.error(`[Stream] Download error: ${err.message}`);
                     pass.destroy(err);
                 }
             })();
