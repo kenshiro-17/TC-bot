@@ -157,6 +157,14 @@ async function createPlayerClient(client) {
             const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
             const ua = 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)';
             logger.debug(`[Stream] Using URL (len=${streamUrl.length}) contentLength=${contentLength || 'unknown'}`);
+            const cookieHeader = ext?.options?.cookie
+                ? ext.options.cookie
+                      .split('\n')
+                      .filter(line => line && !line.startsWith('#'))
+                      .map(line => line.split('\t'))
+                      .map(parts => `${parts[5]}=${parts[6]}`)
+                      .join('; ')
+                : '';
 
             (async () => {
                 try {
@@ -186,7 +194,12 @@ async function createPlayerClient(client) {
                     // If content length unknown, do a single request without range
                     if (!total) {
                         const resp = await innertube.session.http.fetch_function(streamUrl, {
-                            headers: { 'User-Agent': ua },
+                            headers: {
+                                'User-Agent': ua,
+                                ...(cookieHeader ? { 'Cookie': cookieHeader } : {}),
+                                'Origin': 'https://www.youtube.com',
+                                'Referer': 'https://www.youtube.com/',
+                            },
                         });
                         if (!resp.ok || !resp.body) {
                             throw new Error(`CDN response ${resp.status}`);
@@ -209,6 +222,9 @@ async function createPlayerClient(client) {
                             headers: {
                                 'User-Agent': ua,
                                 'Accept': '*/*',
+                                ...(cookieHeader ? { 'Cookie': cookieHeader } : {}),
+                                'Origin': 'https://www.youtube.com',
+                                'Referer': 'https://www.youtube.com/',
                             },
                         });
 
@@ -229,7 +245,13 @@ async function createPlayerClient(client) {
                         if (wrote === 0) {
                             logger.debug('[Stream] Empty body for range request, trying full fetch...');
                             const fullResp = await innertube.session.http.fetch_function(streamUrl, {
-                                headers: { 'User-Agent': ua, 'Accept': '*/*' },
+                                headers: {
+                                    'User-Agent': ua,
+                                    'Accept': '*/*',
+                                    ...(cookieHeader ? { 'Cookie': cookieHeader } : {}),
+                                    'Origin': 'https://www.youtube.com',
+                                    'Referer': 'https://www.youtube.com/',
+                                },
                             });
                             if (!fullResp.ok || !fullResp.body) {
                                 logger.error(`[Stream] CDN full response ${fullResp.status}`);
