@@ -125,14 +125,14 @@ async function createPlayerClient(client) {
             // ("Failed to extract signature decipher algorithm").
             useClient: 'IOS',
         },
-        // Custom stream: use youtubei.js's built-in download() which handles
-        // CDN authentication, headers, and chunked range requests properly.
-        // Pipe through PassThrough for Node.js stream compatibility and backpressure.
+        // Custom stream: manually construct CDN requests with PoToken and
+        // proper STREAM_HEADERS. The IOS client provides direct stream URLs
+        // but YouTube CDN blocks Railway IPs without the PoToken (pot=) param.
+        // We manually add it since IOS URLs bypass format.decipher().
         createStream: async (track, _ext) => {
             const ext = YoutubeiExtractor.getInstance();
             const innertube = ext.innerTube;
             const { PassThrough } = require('stream');
-            const { Readable } = require('stream');
 
             let videoId = new URL(track.url).searchParams.get('v');
             if (!videoId) videoId = track.url.split('/').at(-1)?.split('?').at(0);
@@ -141,33 +141,81 @@ async function createPlayerClient(client) {
             const videoInfo = await innertube.getBasicInfo(videoId, 'IOS');
 
             const format = videoInfo.chooseFormat({ quality: 'best', format: 'mp4', type: 'audio' });
+
+            // Get the stream URL — try decipher first (adds pot= param), fall back to direct URL
+            let streamUrl;
+            const sessionPlayer = innertube.session.player;
+            if (sessionPlayer) {
+                streamUrl = format.decipher(sessionPlayer);
+                logger.info(`[Stream] Using deciphered URL (pot=${sessionPlayer.po_token ? 'yes' : 'no'}, itag=${format.itag})`);
+            } else {
+                streamUrl = format.url;
+                logger.warn(`[Stream] No session player available, using direct URL (no PoToken)`);
+            }
+
+            if (!streamUrl) {
+                throw new Error(`No stream URL available (itag=${format.itag})`);
+            }
+
+            // Manually add pot= if decipher didn't (e.g. IOS URLs may skip it)
+            const poToken = innertube.session.po_token;
+            if (poToken && !streamUrl.includes('pot=')) {
+                const urlObj = new URL(streamUrl);
+                urlObj.searchParams.set('pot', poToken);
+                streamUrl = urlObj.toString();
+                logger.info(`[Stream] Manually added PoToken to CDN URL`);
+            }
+
             logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}`);
 
-            // Use youtubei.js's built-in download which handles headers + auth properly
-            logger.info(`[Stream] Starting download via videoInfo.download()...`);
-            const webStream = await videoInfo.download({ type: 'audio', quality: 'best', format: 'mp4' });
-
-            // Convert Web ReadableStream to Node.js Readable, then pipe through PassThrough
-            // for proper backpressure handling with FFmpeg
             const passthrough = new PassThrough();
-            const nodeStream = Readable.fromWeb(webStream);
+            const STREAM_HEADERS = {
+                'accept': '*/*',
+                'origin': 'https://www.youtube.com',
+                'referer': 'https://www.youtube.com',
+                'DNT': '?1',
+            };
 
-            nodeStream.on('data', (chunk) => {
-                if (!passthrough.write(chunk)) {
-                    nodeStream.pause();
-                    passthrough.once('drain', () => nodeStream.resume());
+            // Download in chunks and pipe through PassThrough for backpressure
+            (async () => {
+                try {
+                    const CHUNK_SIZE = 1048576 * 10; // 10MB
+                    let start = 0;
+                    let end = Math.min(format.content_length, CHUNK_SIZE);
+
+                    while (start < format.content_length) {
+                        if (end >= format.content_length) end = format.content_length;
+
+                        const fUrl = `${streamUrl}&cpn=${videoInfo.cpn}&range=${start}-${end}`;
+                        const resp = await innertube.session.http.fetch_function(fUrl, {
+                            method: 'GET',
+                            headers: STREAM_HEADERS,
+                            redirect: 'follow',
+                        });
+
+                        if (!resp.ok || !resp.body) {
+                            logger.error(`[Stream] CDN error at ${Math.round(start / format.content_length * 100)}%: status=${resp.status}`);
+                            passthrough.destroy(new Error(`CDN returned ${resp.status}`));
+                            return;
+                        }
+
+                        for await (const chunk of resp.body) {
+                            if (!passthrough.write(Buffer.from(chunk))) {
+                                await new Promise(resolve => passthrough.once('drain', resolve));
+                            }
+                        }
+
+                        start = end + 1;
+                        end += CHUNK_SIZE;
+                    }
+
+                    logger.info(`[Stream] Download complete (${format.content_length} bytes)`);
+                    passthrough.end();
+                } catch (err) {
+                    logger.error(`[Stream] Download error: ${err.message}`);
+                    passthrough.destroy(err);
                 }
-            });
-
-            nodeStream.on('end', () => {
-                logger.info(`[Stream] Download complete for: ${track.title}`);
-                passthrough.end();
-            });
-
-            nodeStream.on('error', (err) => {
-                logger.error(`[Stream] Download error: ${err.message}`);
-                passthrough.destroy(err);
-            });
+            })();
 
             return passthrough;
         },
