@@ -103,12 +103,14 @@ async function createPlayerClient(client) {
 
     const player = new Player(client);
 
-    // Load default extractors (SoundCloud, Spotify metadata, etc.)
-    await player.extractors.loadMulti(DefaultExtractors);
-    logger.info('Default extractors loaded');
-
-    // Register YoutubeiExtractor for YouTube support
-    const youtubeiOptions = {};
+    // Register YoutubeiExtractor FIRST so it handles YouTube URLs
+    // before any default extractor can claim them
+    const youtubeiOptions = {
+        // Use ANDROID client for streaming to avoid signature decipher issues
+        streamOptions: {
+            useClient: 'ANDROID',
+        },
+    };
 
     // Add cookie-based authentication if configured
     if (process.env.YOUTUBE_COOKIES_PATH) {
@@ -123,6 +125,14 @@ async function createPlayerClient(client) {
 
     await player.extractors.register(YoutubeiExtractor, youtubeiOptions);
     logger.info('YoutubeiExtractor registered for YouTube support');
+
+    // Load default extractors (SoundCloud, Spotify metadata, etc.)
+    // Exclude any YouTube-related default extractors to avoid conflicts
+    await player.extractors.loadMulti(DefaultExtractors, {
+        YouTubeExtractor: false,
+        YoutubeMusicExtractor: false,
+    });
+    logger.info('Default extractors loaded (YouTube handlers excluded)');
 
     // Register player event handlers
     registerEventHandlers(player);
