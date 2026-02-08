@@ -112,27 +112,65 @@ async function createPlayerClient(client) {
     });
 
     // Register YoutubeiExtractor FIRST so it handles YouTube URLs
-    // before any default extractor can claim them
-    const youtubeiOptions = {
-        // Use ANDROID client for streaming to avoid signature decipher issues
+    // before any default extractor can claim them.
+    //
+    // Cookies can cause InnerTube session failures (stale/expired cookies
+    // poison the session and make ALL searches return 0 results).
+    // Strategy: try with cookies first, verify with a test search,
+    // and if it fails, re-register without cookies.
+    const baseOptions = {
         streamOptions: {
             useClient: 'ANDROID',
         },
     };
 
-    // Add cookie-based authentication if configured
+    let usedCookies = false;
+
+    // Try with cookies if configured
     if (process.env.YOUTUBE_COOKIES_PATH) {
         try {
             const cookieContent = fs.readFileSync(process.env.YOUTUBE_COOKIES_PATH, 'utf8');
-            youtubeiOptions.cookie = cookieContent;
-            logger.info('YouTube cookies configured for YoutubeiExtractor');
+            const optionsWithCookies = { ...baseOptions, cookie: cookieContent };
+
+            await player.extractors.register(YoutubeiExtractor, optionsWithCookies);
+            logger.info('YoutubeiExtractor registered with cookies');
+
+            // Verify the extractor actually works with a test search
+            const testResult = await player.search('youtube test video', {});
+            if (testResult.hasTracks()) {
+                logger.info('YoutubeiExtractor verification passed (with cookies)');
+                usedCookies = true;
+            } else {
+                // Cookies are broken - unregister and try without
+                logger.warn('YoutubeiExtractor search failed with cookies, retrying without cookies...');
+                await player.extractors.unregister(YoutubeiExtractor.identifier || 'com.retrouser955.discord-player.discord-player-youtubei');
+            }
         } catch (error) {
-            logger.warn(`Failed to read YouTube cookies: ${error.message}`);
+            logger.warn(`Cookie-based registration failed: ${error.message}`);
+            // Try to unregister in case it was partially registered
+            try {
+                await player.extractors.unregister('com.retrouser955.discord-player.discord-player-youtubei');
+            } catch { /* ignore */ }
         }
     }
 
-    await player.extractors.register(YoutubeiExtractor, youtubeiOptions);
-    logger.info('YoutubeiExtractor registered for YouTube support');
+    // Register without cookies if we haven't successfully registered yet
+    if (!usedCookies) {
+        await player.extractors.register(YoutubeiExtractor, baseOptions);
+        logger.info('YoutubeiExtractor registered without cookies');
+
+        // Verify it works
+        try {
+            const testResult = await player.search('youtube test video', {});
+            if (testResult.hasTracks()) {
+                logger.info('YoutubeiExtractor verification passed (no cookies)');
+            } else {
+                logger.warn('YoutubeiExtractor verification failed - YouTube searches may not work');
+            }
+        } catch (error) {
+            logger.warn(`YoutubeiExtractor verification error: ${error.message}`);
+        }
+    }
 
     // Load default extractors (SoundCloud, Spotify, Vimeo, etc.)
     // Note: YouTube extractors were already removed from defaults in discord-player v7
