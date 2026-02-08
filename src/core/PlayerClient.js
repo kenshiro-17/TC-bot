@@ -119,23 +119,13 @@ async function createPlayerClient(client) {
     // Without it, search works but audio stream downloads get blocked.
     const baseOptions = {
         generateWithPoToken: true,
-        // Pin a known working YouTube player ID so signature decipher extraction
-        // succeeds. Without this, youtubei.js auto-detects a player version that
-        // may have changed its script format, causing "Failed to extract signature
-        // decipher algorithm" and breaking PoToken application to CDN URLs.
-        innertubeConfigRaw: {
-            player_id: '0004de42',
-        },
         streamOptions: {
-            // IOS client provides direct stream URLs (no signature deciphering).
-            // WEB client requires signature deciphering which fails on Railway
-            // ("Failed to extract signature decipher algorithm").
             useClient: 'IOS',
         },
-        // Custom stream: manually construct CDN requests with PoToken and
-        // proper STREAM_HEADERS. The IOS client provides direct stream URLs
-        // but YouTube CDN blocks Railway IPs without the PoToken (pot=) param.
-        // We manually add it since IOS URLs bypass format.decipher().
+        // Custom stream: IOS client provides direct stream URLs that work with
+        // iOS User-Agent headers from Railway. The default createNativeReadable
+        // has a backpressure bug (pushes all data + EOF in one read() call).
+        // This implementation uses PassThrough with proper backpressure handling.
         createStream: async (track, _ext) => {
             const ext = YoutubeiExtractor.getInstance();
             const innertube = ext.innerTube;
@@ -148,42 +138,17 @@ async function createPlayerClient(client) {
             const videoInfo = await innertube.getBasicInfo(videoId, 'IOS');
 
             const format = videoInfo.chooseFormat({ quality: 'best', format: 'mp4', type: 'audio' });
+            logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}, hasUrl=${!!format.url}`);
 
-            // Get the stream URL — try decipher first (adds pot= param), fall back to direct URL
-            let streamUrl;
-            const sessionPlayer = innertube.session.player;
-            if (sessionPlayer) {
-                streamUrl = format.decipher(sessionPlayer);
-                logger.info(`[Stream] Using deciphered URL (pot=${sessionPlayer.po_token ? 'yes' : 'no'}, itag=${format.itag})`);
-            } else {
-                streamUrl = format.url;
-                logger.warn(`[Stream] No session player available, using direct URL (no PoToken)`);
-            }
-
-            if (!streamUrl) {
+            if (!format.url || !format.content_length) {
                 throw new Error(`No stream URL available (itag=${format.itag})`);
             }
 
-            // Manually add pot= if decipher didn't (e.g. IOS URLs may skip it)
-            const poToken = innertube.session.po_token;
-            if (poToken && !streamUrl.includes('pot=')) {
-                const urlObj = new URL(streamUrl);
-                urlObj.searchParams.set('pot', poToken);
-                streamUrl = urlObj.toString();
-                logger.info(`[Stream] Manually added PoToken to CDN URL`);
-            }
-
-            logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}`);
-
             const passthrough = new PassThrough();
-            const STREAM_HEADERS = {
-                'accept': '*/*',
-                'origin': 'https://www.youtube.com',
-                'referer': 'https://www.youtube.com',
-                'DNT': '?1',
-            };
 
-            // Download in chunks and pipe through PassThrough for backpressure
+            // Download in chunks with iOS User-Agent (matches the IOS client identity).
+            // YouTube CDN accepts this from Railway IPs since IOS URLs include
+            // pre-authenticated tokens from the InnerTube API response.
             (async () => {
                 try {
                     const CHUNK_SIZE = 1048576 * 10; // 10MB
@@ -193,11 +158,12 @@ async function createPlayerClient(client) {
                     while (start < format.content_length) {
                         if (end >= format.content_length) end = format.content_length;
 
-                        const fUrl = `${streamUrl}&cpn=${videoInfo.cpn}&range=${start}-${end}`;
+                        const fUrl = `${format.url}&cpn=${videoInfo.cpn}&range=${start}-${end}`;
                         const resp = await innertube.session.http.fetch_function(fUrl, {
                             method: 'GET',
-                            headers: STREAM_HEADERS,
-                            redirect: 'follow',
+                            headers: {
+                                'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
+                            },
                         });
 
                         if (!resp.ok || !resp.body) {
