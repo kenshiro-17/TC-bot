@@ -113,84 +113,9 @@ async function createPlayerClient(client) {
 
     // Register YoutubeiExtractor FIRST so it handles YouTube URLs
     // before any default extractor can claim them.
-    //
-    // PoToken (Proof of Origin Token) is required to bypass YouTube's
-    // IP-based blocking of cloud/datacenter IPs (e.g., Railway, Heroku).
-    // Without it, search works but audio stream downloads get blocked.
     const baseOptions = {
-        generateWithPoToken: true,
         streamOptions: {
             useClient: 'IOS',
-        },
-        // Custom stream: IOS client provides direct stream URLs that work with
-        // iOS User-Agent headers from Railway. The default createNativeReadable
-        // has a backpressure bug (pushes all data + EOF in one read() call).
-        // This implementation uses PassThrough with proper backpressure handling.
-        createStream: async (track, _ext) => {
-            const ext = YoutubeiExtractor.getInstance();
-            const innertube = ext.innerTube;
-            const { PassThrough } = require('stream');
-
-            let videoId = new URL(track.url).searchParams.get('v');
-            if (!videoId) videoId = track.url.split('/').at(-1)?.split('?').at(0);
-
-            logger.info(`[Stream] Fetching video info for ID: ${videoId} (client: IOS)`);
-            const videoInfo = await innertube.getBasicInfo(videoId, 'IOS');
-
-            const format = videoInfo.chooseFormat({ quality: 'best', format: 'mp4', type: 'audio' });
-            logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}, hasUrl=${!!format.url}`);
-
-            if (!format.url || !format.content_length) {
-                throw new Error(`No stream URL available (itag=${format.itag})`);
-            }
-
-            const passthrough = new PassThrough();
-
-            // Download in chunks with iOS User-Agent (matches the IOS client identity).
-            // YouTube CDN accepts this from Railway IPs since IOS URLs include
-            // pre-authenticated tokens from the InnerTube API response.
-            (async () => {
-                try {
-                    const CHUNK_SIZE = 1048576 * 10; // 10MB
-                    let start = 0;
-                    let end = Math.min(format.content_length, CHUNK_SIZE);
-
-                    while (start < format.content_length) {
-                        if (end >= format.content_length) end = format.content_length;
-
-                        const fUrl = `${format.url}&cpn=${videoInfo.cpn}&range=${start}-${end}`;
-                        const resp = await innertube.session.http.fetch_function(fUrl, {
-                            method: 'GET',
-                            headers: {
-                                'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
-                            },
-                        });
-
-                        if (!resp.ok || !resp.body) {
-                            logger.error(`[Stream] CDN error at ${Math.round(start / format.content_length * 100)}%: status=${resp.status}`);
-                            passthrough.destroy(new Error(`CDN returned ${resp.status}`));
-                            return;
-                        }
-
-                        for await (const chunk of resp.body) {
-                            if (!passthrough.write(Buffer.from(chunk))) {
-                                await new Promise(resolve => passthrough.once('drain', resolve));
-                            }
-                        }
-
-                        start = end + 1;
-                        end += CHUNK_SIZE;
-                    }
-
-                    logger.info(`[Stream] Download complete (${format.content_length} bytes)`);
-                    passthrough.end();
-                } catch (err) {
-                    logger.error(`[Stream] Download error: ${err.message}`);
-                    passthrough.destroy(err);
-                }
-            })();
-
-            return passthrough;
         },
     };
 
@@ -398,9 +323,8 @@ function registerEventHandlers(player) {
         }
     });
 
-    // Debug events - temporarily at info level to diagnose stream issues on Railway
     player.events.on('debug', (queue, message) => {
-        logger.info(`[Player Debug] ${message}`);
+        logger.debug(`[Player Debug] ${message}`);
     });
 
     logger.debug('Player event handlers registered');
