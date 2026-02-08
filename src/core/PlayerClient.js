@@ -125,6 +125,78 @@ async function createPlayerClient(client) {
             // ("Failed to extract signature decipher algorithm").
             useClient: 'IOS',
         },
+        // Custom stream function to diagnose YouTube CDN blocking
+        createStream: async (track, _ext) => {
+            const ext = YoutubeiExtractor.getInstance();
+            const innertube = ext.innerTube;
+
+            let videoId = new URL(track.url).searchParams.get('v');
+            if (!videoId) videoId = track.url.split('/').at(-1)?.split('?').at(0);
+
+            logger.info(`[Stream] Fetching video info for ID: ${videoId} (client: IOS)`);
+            const videoInfo = await innertube.getBasicInfo(videoId, 'IOS');
+
+            const format = videoInfo.chooseFormat({ quality: 'best', format: 'mp4', type: 'audio' });
+            logger.info(`[Stream] Format: itag=${format.itag}, contentLength=${format.content_length}, hasUrl=${!!format.url}`);
+
+            if (!format.url || !format.content_length) {
+                throw new Error(`No stream URL available (itag=${format.itag})`);
+            }
+
+            // Test fetch the first chunk to diagnose CDN blocking
+            const testUrl = `${format.url}&cpn=${videoInfo.cpn}&range=0-${Math.min(format.content_length, 65536)}`;
+            logger.info(`[Stream] Testing CDN fetch...`);
+            const testResp = await innertube.session.http.fetch_function(testUrl, {
+                headers: { 'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)' },
+            });
+            logger.info(`[Stream] CDN response: status=${testResp.status}, ok=${testResp.ok}, contentType=${testResp.headers.get('content-type')}`);
+
+            if (!testResp.ok) {
+                const body = await testResp.text();
+                logger.error(`[Stream] CDN blocked: ${testResp.status} - ${body.slice(0, 500)}`);
+                throw new Error(`YouTube CDN returned ${testResp.status}`);
+            }
+
+            // CDN works, create the actual readable stream
+            const { Readable } = require('stream');
+            const TEN_MB = 1048576 * 10;
+            let start = 0;
+            let end = Math.min(format.content_length, TEN_MB);
+            let isEnded = false;
+
+            return new Readable({
+                async read() {
+                    try {
+                        if (isEnded) return;
+                        if (end >= format.content_length) {
+                            isEnded = true;
+                            end = format.content_length;
+                        }
+                        const fUrl = `${format.url}&cpn=${videoInfo.cpn}&range=${start}-${end || ''}`;
+                        const resp = await innertube.session.http.fetch_function(fUrl, {
+                            headers: { 'User-Agent': 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)' },
+                        });
+                        if (!resp.body) {
+                            logger.error(`[Stream] No body at ${Math.round(start / format.content_length * 100)}%`);
+                            this.destroy(new Error('Stream body missing'));
+                            return;
+                        }
+                        for await (const chunk of resp.body) {
+                            this.push(Buffer.from(chunk));
+                        }
+                        if (isEnded) {
+                            logger.info(`[Stream] Download complete (${format.content_length} bytes)`);
+                            this.push(null);
+                        }
+                        start = end + 1;
+                        end += TEN_MB;
+                    } catch (err) {
+                        logger.error(`[Stream] Read error: ${err.message}`);
+                        this.destroy(err);
+                    }
+                },
+            });
+        },
     };
 
     let usedCookies = false;
