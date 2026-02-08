@@ -5,6 +5,7 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
+const { useQueue } = require('discord-player');
 const { errorEmbed, successEmbed } = require('../utils/embed');
 const logger = require('../utils/logger');
 
@@ -13,18 +14,13 @@ module.exports = {
         .setName('leave')
         .setDescription('Leave the voice channel'),
 
-    /**
-     * Execute the leave command
-     * @param {ChatInputCommandInteraction} interaction
-     */
     async execute(interaction) {
         const member = interaction.member;
         const voiceChannel = member.voice?.channel;
-        const distube = interaction.client.distube;
 
         // Check if bot is in a voice channel
-        const botVoice = distube.voices.get(interaction.guildId);
-        if (!botVoice) {
+        const botVoice = interaction.guild.members.me?.voice;
+        if (!botVoice?.channel) {
             return interaction.reply({
                 embeds: [errorEmbed('Not Connected', "I'm not in a voice channel.")],
                 ephemeral: true
@@ -40,7 +36,7 @@ module.exports = {
         }
 
         // Check if user is in the same voice channel as the bot
-        if (botVoice.channel?.id !== voiceChannel.id) {
+        if (botVoice.channel.id !== voiceChannel.id) {
             return interaction.reply({
                 embeds: [errorEmbed('Wrong Channel', 'You must be in the same voice channel as me.')],
                 ephemeral: true
@@ -48,16 +44,13 @@ module.exports = {
         }
 
         try {
-            const channelName = botVoice.channel?.name || 'voice channel';
+            const channelName = botVoice.channel.name || 'voice channel';
 
-            // Stop any playing music and clear queue
-            const queue = distube.getQueue(interaction.guildId);
+            // Destroy the queue if one exists (stops playback and disconnects)
+            const queue = useQueue(interaction.guildId);
             if (queue) {
-                await distube.stop(interaction.guildId);
+                queue.delete();
             }
-
-            // Leave the voice channel
-            await distube.voices.leave(interaction.guildId);
 
             await interaction.reply({
                 embeds: [successEmbed('Left Voice Channel', `Disconnected from **${channelName}**. See you later!`)]

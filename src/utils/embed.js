@@ -3,6 +3,8 @@
  *
  * Factory functions for creating consistent, styled embeds
  * for music bot responses.
+ *
+ * Compatible with discord-player Track objects.
  */
 
 const { EmbedBuilder } = require('discord.js');
@@ -25,11 +27,18 @@ function formatDuration(seconds) {
 }
 
 /**
+ * Parse a duration string like "3:45" or "1:02:30" into seconds
+ */
+function parseDuration(str) {
+    if (!str) return 0;
+    const parts = str.split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0] || 0;
+}
+
+/**
  * Create a visual progress bar
- * @param {number} current - Current position in seconds
- * @param {number} total - Total duration in seconds
- * @param {number} length - Bar length in characters (default 12)
- * @returns {string} Progress bar string like [▓▓▓▓▓░░░░░░░]
  */
 function createProgressBar(current, total, length = 12) {
     if (!total || total === 0) return '[Live Stream]';
@@ -38,35 +47,43 @@ function createProgressBar(current, total, length = 12) {
     const filled = Math.round(progress * length);
     const empty = length - filled;
 
-    const filledChar = '▓';
-    const emptyChar = '░';
+    const filledChar = '\u2593';
+    const emptyChar = '\u2591';
 
     return `[${filledChar.repeat(filled)}${emptyChar.repeat(empty)}]`;
 }
 
 /**
  * Create "Now Playing" embed for current track
+ * Works with discord-player Track objects
  */
-function nowPlayingEmbed(song, queue) {
+function nowPlayingEmbed(track, queue) {
     const embed = new EmbedBuilder()
         .setColor(COLORS.PRIMARY)
         .setTitle('Now Playing')
-        .setDescription(`[${song.name}](${song.url})`)
+        .setDescription(`[${track.title}](${track.url})`)
         .addFields(
-            { name: 'Duration', value: formatDuration(song.duration), inline: true },
-            { name: 'Requested by', value: song.user?.toString() || 'Unknown', inline: true }
+            { name: 'Duration', value: track.duration || 'Unknown', inline: true },
+            { name: 'Requested by', value: track.requestedBy?.toString() || 'Unknown', inline: true }
         );
 
-    if (song.thumbnail) {
-        embed.setThumbnail(song.thumbnail);
+    if (track.thumbnail) {
+        embed.setThumbnail(track.thumbnail);
     }
 
-    if (queue && queue.songs.length > 1) {
-        embed.addFields({
-            name: 'Up Next',
-            value: queue.songs[1].name.substring(0, 50) + (queue.songs[1].name.length > 50 ? '...' : ''),
-            inline: false
-        });
+    // Show up next if there are more tracks in the queue
+    if (queue && queue.tracks && queue.tracks.size > 0) {
+        const nextTrack = queue.tracks.at(0);
+        if (nextTrack) {
+            const nextName = nextTrack.title.length > 50
+                ? nextTrack.title.substring(0, 50) + '...'
+                : nextTrack.title;
+            embed.addFields({
+                name: 'Up Next',
+                value: nextName,
+                inline: false
+            });
+        }
     }
 
     return embed;
@@ -74,20 +91,21 @@ function nowPlayingEmbed(song, queue) {
 
 /**
  * Create "Added to Queue" embed for enqueued track
+ * Works with discord-player Track objects
  */
-function addedToQueueEmbed(song, position) {
+function addedToQueueEmbed(track, position) {
     const embed = new EmbedBuilder()
         .setColor(COLORS.SUCCESS)
         .setTitle('Added to Queue')
-        .setDescription(`[${song.name}](${song.url})`)
+        .setDescription(`[${track.title}](${track.url})`)
         .addFields(
-            { name: 'Duration', value: formatDuration(song.duration), inline: true },
+            { name: 'Duration', value: track.duration || 'Unknown', inline: true },
             { name: 'Position', value: `#${position}`, inline: true },
-            { name: 'Requested by', value: song.user?.toString() || 'Unknown', inline: true }
+            { name: 'Requested by', value: track.requestedBy?.toString() || 'Unknown', inline: true }
         );
 
-    if (song.thumbnail) {
-        embed.setThumbnail(song.thumbnail);
+    if (track.thumbnail) {
+        embed.setThumbnail(track.thumbnail);
     }
 
     return embed;
@@ -95,35 +113,39 @@ function addedToQueueEmbed(song, position) {
 
 /**
  * Create queue display embed
+ * Works with discord-player queue objects
  */
 function queueEmbed(queue, page = 1, songsPerPage = 10) {
-    const songs = queue.songs;
-    const totalPages = Math.ceil(songs.length / songsPerPage);
+    const currentTrack = queue.currentTrack;
+    const tracks = queue.tracks.toArray();
+    const allTracks = currentTrack ? [currentTrack, ...tracks] : tracks;
+    const totalPages = Math.ceil(allTracks.length / songsPerPage) || 1;
     const startIndex = (page - 1) * songsPerPage;
-    const endIndex = Math.min(startIndex + songsPerPage, songs.length);
+    const endIndex = Math.min(startIndex + songsPerPage, allTracks.length);
 
-    const currentSong = songs[0];
-    const queueList = songs
+    const queueList = allTracks
         .slice(startIndex, endIndex)
-        .map((song, index) => {
+        .map((track, index) => {
             const position = startIndex + index;
             const prefix = position === 0 ? '**Now:**' : `**${position}.**`;
-            const duration = formatDuration(song.duration);
-            const name = song.name.length > 40 ? song.name.substring(0, 40) + '...' : song.name;
-            return `${prefix} [${name}](${song.url}) \`${duration}\``;
+            const dur = track.duration || 'Unknown';
+            const name = track.title.length > 40 ? track.title.substring(0, 40) + '...' : track.title;
+            return `${prefix} [${name}](${track.url}) \`${dur}\``;
         })
         .join('\n');
 
-    const totalDuration = songs.reduce((acc, song) => acc + (song.duration || 0), 0);
+    const totalDurationMs = allTracks.reduce((acc, t) => acc + (t.durationMS || 0), 0);
+
+    const repeatModeMap = { 0: 'Off', 1: 'Track', 2: 'Queue', 3: 'Autoplay' };
 
     const embed = new EmbedBuilder()
         .setColor(COLORS.INFO)
-        .setTitle(`Queue for ${queue.voiceChannel?.name || 'Voice Channel'}`)
+        .setTitle(`Queue for ${queue.channel?.name || 'Voice Channel'}`)
         .setDescription(queueList || 'No songs in queue')
         .addFields(
-            { name: 'Total Songs', value: `${songs.length}`, inline: true },
-            { name: 'Total Duration', value: formatDuration(totalDuration), inline: true },
-            { name: 'Loop', value: queue.repeatMode === 0 ? 'Off' : queue.repeatMode === 1 ? 'Song' : 'Queue', inline: true }
+            { name: 'Total Songs', value: `${allTracks.length}`, inline: true },
+            { name: 'Total Duration', value: formatDuration(Math.floor(totalDurationMs / 1000)), inline: true },
+            { name: 'Loop', value: repeatModeMap[queue.repeatMode] || 'Off', inline: true }
         )
         .setFooter({ text: `Page ${page}/${totalPages}` });
 
@@ -162,6 +184,7 @@ function infoEmbed(title, description) {
 
 module.exports = {
     formatDuration,
+    parseDuration,
     createProgressBar,
     nowPlayingEmbed,
     addedToQueueEmbed,

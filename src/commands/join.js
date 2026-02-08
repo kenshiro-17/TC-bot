@@ -14,10 +14,6 @@ module.exports = {
         .setName('join')
         .setDescription('Join your current voice channel'),
 
-    /**
-     * Execute the join command
-     * @param {ChatInputCommandInteraction} interaction
-     */
     async execute(interaction) {
         const member = interaction.member;
         const voiceChannel = member.voice?.channel;
@@ -46,19 +42,32 @@ module.exports = {
         }
 
         try {
-            const distube = interaction.client.distube;
-
             // Check if bot is already in this voice channel
-            const existingVoice = distube.voices.get(interaction.guildId);
-            if (existingVoice && existingVoice.channel?.id === voiceChannel.id) {
+            const botVoice = interaction.guild.members.me?.voice;
+            if (botVoice?.channel?.id === voiceChannel.id) {
                 return interaction.reply({
                     embeds: [errorEmbed('Already Connected', `I'm already in ${voiceChannel.name}!`)],
                     ephemeral: true
                 });
             }
 
-            // Join the voice channel
-            await distube.voices.join(voiceChannel);
+            // Use discord-player to join (it handles voice connections internally)
+            const { useMainPlayer } = require('discord-player');
+            const player = useMainPlayer();
+
+            // Create a queue for the guild to establish the voice connection
+            const queue = player.queues.create(interaction.guildId, {
+                metadata: {
+                    channel: interaction.channel,
+                    guild: interaction.guild,
+                },
+                volume: 80,
+                leaveOnEmpty: false,
+                leaveOnEnd: false,
+                leaveOnStop: false,
+            });
+
+            await queue.connect(voiceChannel);
 
             await interaction.reply({
                 embeds: [successEmbed('Joined Voice Channel', `Connected to **${voiceChannel.name}**. Use \`/play\` to start playing music!`)]

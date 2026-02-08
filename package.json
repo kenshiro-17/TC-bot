@@ -1,24 +1,20 @@
 {
   "name": "discord-music-bot",
-  "version": "1.0.0",
-  "description": "High-performance Discord music bot with YouTube streaming via DisTube",
+  "version": "2.0.0",
+  "description": "High-performance Discord music bot with YouTube streaming via discord-player",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js",
-    "postinstall": "npm rebuild --no-optional --ignore-scripts"
+    "dev": "node --watch index.js"
   },
   "dependencies": {
+    "discord-player": "^7.1.0",
+    "discord-player-youtubei": "^1.3.1",
+    "@discord-player/extractor": "^7.1.0",
     "discord.js": "^14.14.1",
-    "@discordjs/voice": "^0.18.0",
-    "@discordjs/opus": "^0.10.0",
-    "opusscript": "^0.1.1",
-    "distube": "^5.2.3",
-    "@distube/yt-dlp": "^2.0.1",
-    "ffmpeg-static": "^5.2.0",
-    "libsodium-wrappers": "^0.7.13",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "ffmpeg-static": "^5.2.0"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -28,7 +24,10 @@
     "music",
     "bot",
     "youtube",
-    "distube"
+    "discord-player"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@railway/cli": "^4.29.0"
+  }
 }

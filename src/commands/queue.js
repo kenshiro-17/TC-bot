@@ -5,6 +5,7 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
+const { useQueue } = require('discord-player');
 const { errorEmbed, queueEmbed } = require('../utils/embed');
 const { QUEUE } = require('../config/constants');
 const logger = require('../utils/logger');
@@ -21,16 +22,11 @@ module.exports = {
                 .setRequired(false)
         ),
 
-    /**
-     * Execute the queue command
-     * @param {ChatInputCommandInteraction} interaction
-     */
     async execute(interaction) {
-        const distube = interaction.client.distube;
-        const queue = distube.getQueue(interaction.guildId);
+        const queue = useQueue(interaction.guildId);
 
         // Check if there's an active queue
-        if (!queue || queue.songs.length === 0) {
+        if (!queue || (!queue.currentTrack && queue.tracks.size === 0)) {
             return interaction.reply({
                 embeds: [errorEmbed('Queue Empty', 'There are no songs in the queue. Use `/play` to add some!')],
                 ephemeral: true
@@ -39,7 +35,8 @@ module.exports = {
 
         try {
             const page = interaction.options.getInteger('page') || 1;
-            const totalPages = Math.ceil(queue.songs.length / QUEUE.DISPLAY_LIMIT);
+            const totalTracks = queue.tracks.size + (queue.currentTrack ? 1 : 0);
+            const totalPages = Math.ceil(totalTracks / QUEUE.DISPLAY_LIMIT) || 1;
 
             // Validate page number
             if (page > totalPages) {

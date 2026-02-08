@@ -14,17 +14,6 @@ module.exports = {
 
     // Audio Configuration
     AUDIO: {
-        // Stream type for DisTube
-        // 0 = Opus (recommended - native Discord format, no transcoding needed)
-        // 1 = Raw (requires FFmpeg transcoding)
-        STREAM_TYPE: 0,
-
-        // Silence padding frames appended after audio ends
-        // Each frame = 20ms, so 5 frames = 100ms jitter buffer
-        // Higher values = smoother playback but slight delay at track end
-        // Lower values = faster transitions but may clip audio
-        SILENCE_PADDING_FRAMES: 5,
-
         // Default volume (0-100)
         DEFAULT_VOLUME: 80,
 

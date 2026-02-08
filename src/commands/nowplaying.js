@@ -5,6 +5,7 @@
  */
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { useQueue } = require('discord-player');
 const { errorEmbed, formatDuration, createProgressBar } = require('../utils/embed');
 const { COLORS } = require('../config/constants');
 const logger = require('../utils/logger');
@@ -14,16 +15,11 @@ module.exports = {
         .setName('nowplaying')
         .setDescription('Show the currently playing song'),
 
-    /**
-     * Execute the nowplaying command
-     * @param {ChatInputCommandInteraction} interaction
-     */
     async execute(interaction) {
-        const distube = interaction.client.distube;
-        const queue = distube.getQueue(interaction.guildId);
+        const queue = useQueue(interaction.guildId);
 
         // Check if there's an active queue with a playing song
-        if (!queue || !queue.songs.length) {
+        if (!queue || !queue.currentTrack) {
             return interaction.reply({
                 embeds: [errorEmbed('Nothing Playing', 'There is no song currently playing. Use `/play` to start!')],
                 ephemeral: true
@@ -31,19 +27,22 @@ module.exports = {
         }
 
         try {
-            const song = queue.songs[0];
-            const currentTime = queue.currentTime;
-            const duration = song.duration;
+            const track = queue.currentTrack;
+            const progress = queue.node.getTimestamp();
+            const currentMs = progress?.current?.value || 0;
+            const totalMs = progress?.total?.value || track.durationMS || 0;
+            const currentSec = Math.floor(currentMs / 1000);
+            const totalSec = Math.floor(totalMs / 1000);
 
             // Create progress bar
-            const progressBar = createProgressBar(currentTime, duration);
-            const timeDisplay = `${formatDuration(currentTime)} / ${formatDuration(duration)}`;
+            const progressBar = createProgressBar(currentSec, totalSec);
+            const timeDisplay = `${formatDuration(currentSec)} / ${track.duration || formatDuration(totalSec)}`;
 
             // Build the embed
             const embed = new EmbedBuilder()
                 .setColor(COLORS.PRIMARY)
                 .setTitle('Now Playing')
-                .setDescription(`[${song.name}](${song.url})`)
+                .setDescription(`[${track.title}](${track.url})`)
                 .addFields(
                     {
                         name: 'Progress',
@@ -52,37 +51,38 @@ module.exports = {
                     },
                     {
                         name: 'Requested by',
-                        value: song.user?.toString() || 'Unknown',
+                        value: track.requestedBy?.toString() || 'Unknown',
                         inline: true
                     },
                     {
                         name: 'Volume',
-                        value: `${queue.volume}%`,
+                        value: `${queue.node.volume}%`,
                         inline: true
                     }
                 );
 
             // Add thumbnail if available
-            if (song.thumbnail) {
-                embed.setThumbnail(song.thumbnail);
+            if (track.thumbnail) {
+                embed.setThumbnail(track.thumbnail);
             }
 
             // Show up next if there are more songs
-            if (queue.songs.length > 1) {
-                const nextSong = queue.songs[1];
-                const nextName = nextSong.name.length > 50
-                    ? nextSong.name.substring(0, 50) + '...'
-                    : nextSong.name;
+            if (queue.tracks.size > 0) {
+                const nextTrack = queue.tracks.at(0);
+                const nextName = nextTrack.title.length > 50
+                    ? nextTrack.title.substring(0, 50) + '...'
+                    : nextTrack.title;
                 embed.addFields({
                     name: 'Up Next',
-                    value: `[${nextName}](${nextSong.url})`,
+                    value: `[${nextName}](${nextTrack.url})`,
                     inline: false
                 });
             }
 
             // Add footer with queue info
+            const totalInQueue = queue.tracks.size + 1;
             embed.setFooter({
-                text: `${queue.songs.length} song${queue.songs.length !== 1 ? 's' : ''} in queue`
+                text: `${totalInQueue} song${totalInQueue !== 1 ? 's' : ''} in queue`
             });
 
             await interaction.reply({ embeds: [embed] });

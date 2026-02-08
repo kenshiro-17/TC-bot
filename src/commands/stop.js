@@ -5,6 +5,7 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
+const { useQueue } = require('discord-player');
 const { errorEmbed, successEmbed } = require('../utils/embed');
 const logger = require('../utils/logger');
 
@@ -13,10 +14,6 @@ module.exports = {
         .setName('stop')
         .setDescription('Stop playback and clear the queue'),
 
-    /**
-     * Execute the stop command
-     * @param {ChatInputCommandInteraction} interaction
-     */
     async execute(interaction) {
         const member = interaction.member;
         const voiceChannel = member.voice?.channel;
@@ -29,8 +26,7 @@ module.exports = {
             });
         }
 
-        const distube = interaction.client.distube;
-        const queue = distube.getQueue(interaction.guildId);
+        const queue = useQueue(interaction.guildId);
 
         // Check if there's an active queue
         if (!queue) {
@@ -41,7 +37,7 @@ module.exports = {
         }
 
         // Check if user is in the same voice channel as the bot
-        if (queue.voiceChannel?.id !== voiceChannel.id) {
+        if (queue.channel?.id !== voiceChannel.id) {
             return interaction.reply({
                 embeds: [errorEmbed('Wrong Channel', 'You must be in the same voice channel as the bot.')],
                 ephemeral: true
@@ -49,10 +45,10 @@ module.exports = {
         }
 
         try {
-            const songCount = queue.songs.length;
+            const songCount = queue.tracks.size + (queue.currentTrack ? 1 : 0);
 
-            // Stop playback and disconnect
-            await distube.stop(interaction.guildId);
+            // Stop playback and destroy the queue (disconnects from voice)
+            queue.delete();
 
             await interaction.reply({
                 embeds: [successEmbed(

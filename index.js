@@ -3,39 +3,35 @@
  *
  * High-performance Discord music bot using:
  * - discord.js v14 for Discord API interaction
- * - @discordjs/voice for voice connection management
- * - DisTube with @distube/yt-dlp for YouTube streaming
+ * - discord-player with discord-player-youtubei for YouTube streaming
  *
  * ARCHITECTURE OVERVIEW:
- * ┌─────────────────────────────────────────────────────────────┐
- * │                     Discord Client                          │
- * │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐   │
- * │  │   Commands  │  │   Events    │  │     DisTube      │   │
- * │  │  /play      │  │  ready      │  │  ┌────────────┐  │   │
- * │  │  /skip      │  │  interact.  │  │  │  yt-dlp    │  │   │
- * │  │  /stop      │  │  ─────────  │  │  │  plugin    │  │   │
- * │  │  /queue     │  │  playSong   │  │  └────────────┘  │   │
- * │  └─────────────┘  │  addSong    │  │                  │   │
- * │                   │  error      │  │  Queue Manager   │   │
- * │                   │  disconnect │  │  Voice Handler   │   │
- * │                   │  finish     │  │  Audio Pipeline  │   │
- * │                   └─────────────┘  └──────────────────┘   │
- * └─────────────────────────────────────────────────────────────┘
+ * +-------------------------------------------------------------+
+ * |                     Discord Client                           |
+ * |  +-------------+  +-------------+  +------------------+     |
+ * |  |   Commands  |  |   Events    |  |  discord-player  |     |
+ * |  |  /play      |  |  ready      |  |  +------------+  |     |
+ * |  |  /skip      |  |  interact.  |  |  | youtubei   |  |     |
+ * |  |  /stop      |  |             |  |  | extractor  |  |     |
+ * |  |  /queue     |  |  playerStart|  |  +------------+  |     |
+ * |  +-------------+  |  audioTrack |  |                  |     |
+ * |                    |  error      |  |  Queue Manager   |     |
+ * |                    |  emptyQueue |  |  Voice Handler   |     |
+ * |                    |  disconnect |  |  Audio Pipeline  |     |
+ * |                    +-------------+  +------------------+     |
+ * +-------------------------------------------------------------+
  *
- * AUDIO PIPELINE (The "No Sound" Fix):
- * 1. /play command triggers distube.play()
- * 2. @distube/yt-dlp extracts video info via yt-dlp binary
- * 3. yt-dlp fetches audio stream (bypasses 403 via fresh signatures)
- * 4. FFmpeg (ffmpeg-static) transcodes to Opus if needed
- * 5. @discordjs/opus encodes the final audio stream
- * 6. createAudioResource() wraps stream with 100ms jitter buffer
- * 7. AudioPlayer streams to VoiceConnection
- * 8. Discord voice gateway receives Opus packets
+ * AUDIO PIPELINE:
+ * 1. /play command triggers player.play()
+ * 2. YoutubeiExtractor extracts video info via youtubei.js
+ * 3. Audio stream URL is fetched (bypasses 403 via InnerTube API)
+ * 4. FFmpeg transcodes to Opus if needed
+ * 5. discord-voip streams audio to VoiceConnection
+ * 6. Discord voice gateway receives Opus packets
  *
  * CRITICAL REQUIREMENTS:
  * - GatewayIntentBits.GuildVoiceStates MUST be enabled
- * - @discordjs/opus must be installed (native bindings)
- * - ffmpeg-static provides FFmpeg binary
+ * - ffmpeg must be available (system or ffmpeg-static)
  * - Bot needs Connect + Speak permissions in voice channels
  */
 
@@ -44,7 +40,7 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { loadCommands } = require('./src/commands');
-const { createDistubeClient } = require('./src/core/DistubeClient');
+const { createPlayerClient } = require('./src/core/PlayerClient');
 const logger = require('./src/utils/logger');
 const fs = require('fs');
 const path = require('path');
@@ -100,32 +96,6 @@ function configureYouTubeCookies() {
     logger.info(`YouTube cookies loaded ${usedRaw ? 'from raw text' : 'from base64'} into ${cookiesPath}`);
 }
 
-function resolveOptionalDependency(name) {
-    try {
-        require.resolve(name);
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
-
-function checkOpusEncoders() {
-    const hasNative = resolveOptionalDependency('@discordjs/opus');
-    const hasFallback = resolveOptionalDependency('opusscript');
-
-    if (hasNative) {
-        return;
-    }
-
-    if (hasFallback) {
-        logger.warn('Native Opus encoder not found; using opusscript fallback. Install @discordjs/opus for best performance.');
-        return;
-    }
-
-    logger.error('No Opus encoder available. Install @discordjs/opus or opusscript.');
-    process.exit(1);
-}
-
 // Create Discord client with required intents
 function createClient() {
     return new Client({
@@ -146,9 +116,6 @@ function createClient() {
 
 // Load event handlers from events directory
 function loadEvents(client) {
-    const fs = require('fs');
-    const path = require('path');
-
     const eventsPath = path.join(__dirname, 'src', 'events');
     const eventFiles = fs.readdirSync(eventsPath)
         .filter(file => file.endsWith('.js'));
@@ -175,10 +142,10 @@ function setupShutdownHandlers(client) {
         logger.info(`Received ${signal}, shutting down gracefully...`);
 
         try {
-            // Destroy all voice connections
-            if (client.distube) {
-                for (const queue of client.distube.queues.values()) {
-                    queue.stop();
+            // Destroy all queues
+            if (client.player) {
+                for (const queue of client.player.queues.cache.values()) {
+                    queue.delete();
                 }
             }
 
@@ -207,9 +174,6 @@ async function main() {
     // Load YouTube cookies if provided
     configureYouTubeCookies();
 
-    // Ensure an Opus encoder is available
-    checkOpusEncoders();
-
     // Create Discord client
     const client = createClient();
 
@@ -219,9 +183,9 @@ async function main() {
     // Load event handlers
     loadEvents(client);
 
-    // Initialize DisTube
+    // Initialize discord-player
     // This must happen AFTER client creation but BEFORE login
-    client.distube = await createDistubeClient(client);
+    client.player = await createPlayerClient(client);
 
     // Setup graceful shutdown
     setupShutdownHandlers(client);

@@ -10,6 +10,7 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
+const { useMainPlayer } = require('discord-player');
 const { QUEUE } = require('../config/constants');
 const { errorEmbed } = require('../utils/embed');
 const logger = require('../utils/logger');
@@ -25,10 +26,6 @@ module.exports = {
                 .setRequired(true)
         ),
 
-    /**
-     * Execute the play command
-     * @param {ChatInputCommandInteraction} interaction
-     */
     async execute(interaction) {
         const query = interaction.options.getString('query');
         const member = interaction.member;
@@ -64,9 +61,9 @@ module.exports = {
             return;
         }
 
-        const distube = interaction.client.distube;
-        const queue = distube.getQueue(interaction.guildId);
-        const currentCount = queue?.songs?.length || 0;
+        const player = useMainPlayer();
+        const existingQueue = player.queues.get(interaction.guildId);
+        const currentCount = existingQueue ? existingQueue.tracks.size + (existingQueue.currentTrack ? 1 : 0) : 0;
 
         if (currentCount + 1 > QUEUE.MAX_SIZE) {
             await respondError(
@@ -77,44 +74,41 @@ module.exports = {
         }
 
         if (!interaction.deferred && !interaction.replied) {
-            // Defer reply since fetching video info may take time
             await interaction.deferReply({ ephemeral: true });
         }
 
         try {
-            // DisTube handles everything:
-            // - URL validation
-            // - Search if query is not a URL
-            // - Queue creation/addition
-            // - Voice connection
-            // - Audio streaming
-            await distube.play(voiceChannel, query, {
-                textChannel: interaction.channel,
-                member: member,
+            const { track } = await player.play(voiceChannel, query, {
+                nodeOptions: {
+                    metadata: {
+                        channel: interaction.channel,
+                        guild: interaction.guild,
+                    },
+                    volume: 80,
+                    leaveOnEmpty: false,
+                    leaveOnEnd: false,
+                    leaveOnStop: false,
+                },
+                requestedBy: interaction.user,
             });
 
-            // DisTube will emit 'playSong' or 'addSong' event
-            // which sends the appropriate embed
-            // We just confirm the command was received
             await interaction.editReply({
                 content: `Searching for **${query}**...`
             });
 
             // Delete the "Searching..." message after a short delay
-            // since DisTube will send its own embed
+            // since the player event will send its own embed
             setTimeout(() => {
                 interaction.deleteReply().catch(() => {});
             }, 2000);
 
         } catch (error) {
-            // Enhanced error logging with stack trace and query context
             logger.error(`Play command failed for query "${query}"`);
             logger.error(error.stack || error);
 
-            // Handle specific error cases
             let errorMessage = 'Failed to play the requested song.';
 
-            if (error.message.includes('No result')) {
+            if (error.message.includes('No result') || error.message.includes('no results')) {
                 errorMessage = 'No results found for your search query.';
             } else if (error.message.includes('private')) {
                 errorMessage = 'This video is private and cannot be played.';
