@@ -104,6 +104,7 @@ module.exports = {
                     leaveOnEmpty: false,
                     leaveOnEnd: false,
                     leaveOnStop: false,
+                    bufferingTimeout: 3000,
                 },
                 requestedBy: interaction.user,
             });

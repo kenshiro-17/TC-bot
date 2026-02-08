@@ -292,6 +292,11 @@ function registerEventHandlers(player) {
         logger.error(`General player error: ${error.message}`);
     });
 
+    // Track finished playing (stream ended)
+    player.events.on('playerFinish', (queue, track) => {
+        logger.info(`Track finished: "${track.title}" (stream ended normally or prematurely)`);
+    });
+
     // Queue finished
     player.events.on('emptyQueue', (queue) => {
         const channel = queue.metadata?.channel;
@@ -321,9 +326,9 @@ function registerEventHandlers(player) {
         }
     });
 
-    // Debug events - always enabled to help diagnose extraction issues
+    // Debug events - temporarily at info level to diagnose stream issues on Railway
     player.events.on('debug', (queue, message) => {
-        logger.debug(`[Player Debug] ${message}`);
+        logger.info(`[Player Debug] ${message}`);
     });
 
     logger.debug('Player event handlers registered');
