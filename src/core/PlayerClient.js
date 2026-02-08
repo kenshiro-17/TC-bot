@@ -125,6 +125,22 @@ async function createPlayerClient(client) {
             if (!innertube) {
                 throw new Error('YoutubeiExtractor is not initialized');
             }
+            // Always load cookies from file for CDN requests, even if extractor
+            // was registered without cookies (search can fail with cookies).
+            let cookieHeader = '';
+            try {
+                if (process.env.YOUTUBE_COOKIES_PATH && fs.existsSync(process.env.YOUTUBE_COOKIES_PATH)) {
+                    const raw = fs.readFileSync(process.env.YOUTUBE_COOKIES_PATH, 'utf8');
+                    cookieHeader = raw
+                        .split('\n')
+                        .filter(line => line && !line.startsWith('#'))
+                        .map(line => line.split('\t'))
+                        .map(parts => `${parts[5]}=${parts[6]}`)
+                        .join('; ');
+                }
+            } catch {
+                cookieHeader = '';
+            }
 
             let videoId = null;
             try {
@@ -157,14 +173,7 @@ async function createPlayerClient(client) {
             const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
             const ua = 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)';
             logger.debug(`[Stream] Using URL (len=${streamUrl.length}) contentLength=${contentLength || 'unknown'}`);
-            const cookieHeader = ext?.options?.cookie
-                ? ext.options.cookie
-                      .split('\n')
-                      .filter(line => line && !line.startsWith('#'))
-                      .map(line => line.split('\t'))
-                      .map(parts => `${parts[5]}=${parts[6]}`)
-                      .join('; ')
-                : '';
+            // cookieHeader already loaded above (may be empty)
 
             (async () => {
                 try {
@@ -286,52 +295,21 @@ async function createPlayerClient(client) {
         },
     };
 
-    let usedCookies = false;
+    // Always register WITHOUT cookies to keep search stable.
+    // Cookies will still be used for CDN downloads inside createStream.
+    await player.extractors.register(YoutubeiExtractor, baseOptions);
+    logger.info('YoutubeiExtractor registered without cookies (cookies used only for CDN)');
 
-    // Try with cookies if configured
-    if (process.env.YOUTUBE_COOKIES_PATH) {
-        try {
-            const cookieContent = fs.readFileSync(process.env.YOUTUBE_COOKIES_PATH, 'utf8');
-            const optionsWithCookies = { ...baseOptions, cookie: cookieContent };
-
-            await player.extractors.register(YoutubeiExtractor, optionsWithCookies);
-            logger.info('YoutubeiExtractor registered with cookies');
-
-            // Verify the extractor actually works with a test search
-            const testResult = await player.search('youtube test video', {});
-            if (testResult.hasTracks()) {
-                logger.info('YoutubeiExtractor verification passed (with cookies)');
-                usedCookies = true;
-            } else {
-                // Do not fallback; some cookie sets fail search but still unlock CDN downloads
-                logger.warn('YoutubeiExtractor search failed with cookies, forcing cookies anyway for CDN access...');
-                usedCookies = true;
-            }
-        } catch (error) {
-            logger.warn(`Cookie-based registration failed: ${error.message}`);
-            // Try to unregister in case it was partially registered
-            try {
-                await player.extractors.unregister('com.retrouser955.discord-player.discord-player-youtubei');
-            } catch { /* ignore */ }
+    // Verify it works
+    try {
+        const testResult = await player.search('youtube test video', {});
+        if (testResult.hasTracks()) {
+            logger.info('YoutubeiExtractor verification passed (no cookies)');
+        } else {
+            logger.warn('YoutubeiExtractor verification failed - YouTube searches may not work');
         }
-    }
-
-    // Register without cookies if we haven't successfully registered yet
-    if (!usedCookies) {
-        await player.extractors.register(YoutubeiExtractor, baseOptions);
-        logger.info('YoutubeiExtractor registered without cookies');
-
-        // Verify it works
-        try {
-            const testResult = await player.search('youtube test video', {});
-            if (testResult.hasTracks()) {
-                logger.info('YoutubeiExtractor verification passed (no cookies)');
-            } else {
-                logger.warn('YoutubeiExtractor verification failed - YouTube searches may not work');
-            }
-        } catch (error) {
-            logger.warn(`YoutubeiExtractor verification error: ${error.message}`);
-        }
+    } catch (error) {
+        logger.warn(`YoutubeiExtractor verification error: ${error.message}`);
     }
 
     // Load default extractors (SoundCloud, Spotify, Vimeo, etc.)
