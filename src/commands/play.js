@@ -78,6 +78,23 @@ module.exports = {
         }
 
         try {
+            // Normalize youtu.be short URLs to youtube.com/watch?v= format
+            // so discord-player can correctly detect video ID + playlist params
+            try {
+                const url = new URL(query);
+                if (url.host === 'youtu.be') {
+                    const videoId = url.pathname.slice(1);
+                    if (videoId) {
+                        const params = new URLSearchParams(url.search);
+                        params.set('v', videoId);
+                        query = `https://www.youtube.com/watch?${params.toString()}`;
+                        logger.info(`Normalized youtu.be URL to: ${query}`);
+                    }
+                }
+            } catch {
+                // Not a URL, treat as search query
+            }
+
             // Search first so we can log the result and diagnose issues
             logger.info(`Searching for: ${query}`);
             const searchResult = await player.search(query, {
