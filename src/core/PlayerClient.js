@@ -165,13 +165,14 @@ async function createPlayerClient(client) {
                     let part = 0;
 
                     const buildUrl = (s, e) => {
-                        const hasRange = streamUrl.includes('range=');
-                        const hasCpn = streamUrl.includes('cpn=');
-                        const sep = streamUrl.includes('?') ? '&' : '?';
-                        let url = streamUrl;
-                        if (!hasRange) url = `${url}${sep}range=${s}-${e}`;
-                        if (!hasCpn && cpn) url = `${url}${url.includes('?') ? '&' : '?'}cpn=${cpn}`;
-                        return url;
+                        try {
+                            const u = new URL(streamUrl);
+                            u.searchParams.set('range', `${s}-${e}`);
+                            if (cpn) u.searchParams.set('cpn', cpn);
+                            return u.toString();
+                        } catch {
+                            return streamUrl;
+                        }
                     };
 
                     // If content length unknown, do a single request without range
@@ -205,10 +206,29 @@ async function createPlayerClient(client) {
                             throw new Error(`CDN response ${resp.status}`);
                         }
 
+                        let wrote = 0;
                         for await (const chunk of resp.body) {
+                            wrote += chunk.length ?? chunk.byteLength ?? 0;
                             if (!pass.write(Buffer.from(chunk))) {
                                 await new Promise(resolve => pass.once('drain', resolve));
                             }
+                        }
+
+                        if (wrote === 0) {
+                            logger.debug('[Stream] Empty body for range request, trying full fetch...');
+                            const fullResp = await innertube.session.http.fetch_function(streamUrl, {
+                                headers: { 'User-Agent': ua, 'Accept': '*/*' },
+                            });
+                            if (!fullResp.ok || !fullResp.body) {
+                                throw new Error(`CDN full response ${fullResp.status}`);
+                            }
+                            for await (const chunk of fullResp.body) {
+                                if (!pass.write(Buffer.from(chunk))) {
+                                    await new Promise(resolve => pass.once('drain', resolve));
+                                }
+                            }
+                            pass.end();
+                            return;
                         }
 
                         part += 1;
